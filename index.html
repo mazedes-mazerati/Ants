@@ -1,0 +1,1391 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Formica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --soil: #110c09;
+    --panel: rgba(23, 16, 12, 0.82);
+    --panel-solid: #17100c;
+    --cell: rgba(14, 10, 8, 0.72);
+    --line: rgba(255, 222, 190, 0.09);
+    --line-2: rgba(255, 222, 190, 0.17);
+    --text: #f1e6d6;
+    --muted: #a8927c;
+    --faint: #6f5d4e;
+    --amber: #ffb13d;
+    --amber-soft: rgba(255, 177, 61, 0.14);
+    --indigo: #8595ff;
+    --honey: #ffe2a0;
+    --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--soil); color: var(--text); overflow: hidden; }
+  body { font-family: var(--display); font-size: 14px; -webkit-font-smoothing: antialiased; }
+
+  #stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+
+  #panel {
+    position: fixed; top: 16px; left: 16px; bottom: 16px; width: 324px; z-index: 2;
+    display: flex; flex-direction: column;
+    background: var(--panel);
+    -webkit-backdrop-filter: blur(18px) saturate(1.25); backdrop-filter: blur(18px) saturate(1.25);
+    border: 1px solid var(--line); border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 230, 200, 0.05);
+    overflow: hidden;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; padding: 16px 18px 14px; }
+  .brand svg { flex: none; filter: drop-shadow(0 0 10px rgba(255, 177, 61, 0.35)); }
+  .brand h1 { margin: 0; font-size: 25px; line-height: 1; font-weight: 700; letter-spacing: -0.03em; font-variation-settings: "opsz" 96; }
+  .brand p { margin: 4px 0 0; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .sheet-toggle { display: none; margin-left: auto; }
+
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 0 16px 12px; padding: 4px; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line); border-radius: 12px; }
+  .tabs button { appearance: none; border: 0; border-radius: 9px; padding: 8px 6px; background: transparent; color: var(--muted); font: 600 13px/1.1 var(--display); cursor: pointer; transition: background .2s, color .2s; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button[aria-selected="true"] { background: var(--amber-soft); color: var(--amber); box-shadow: inset 0 0 0 1px rgba(255, 177, 61, 0.25); }
+
+  .panel-body { flex: 1; overflow-y: auto; padding: 2px 18px 22px; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .stat { background: var(--cell); padding: 10px 12px 11px; min-width: 0; }
+  .stat .k { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat .v { margin-top: 3px; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; font-variation-settings: "opsz" 40; white-space: nowrap; }
+  .stat .v.amber { color: var(--amber); }
+
+  .chart-wrap { margin-top: 12px; }
+  .chart-cap { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .chart-cap .keys { display: flex; gap: 10px; }
+  .chart-cap .keys span::before { content: ""; display: inline-block; width: 8px; height: 2px; margin-right: 5px; vertical-align: middle; background: currentColor; }
+  canvas.chart { display: block; width: 100%; height: 86px; }
+
+  .actions { display: flex; gap: 8px; margin-top: 14px; }
+  .btn { flex: 1; appearance: none; border: 1px solid var(--line-2); border-radius: 10px; padding: 9px 10px; background: rgba(255, 240, 220, 0.04); color: var(--text); font: 500 13px/1.1 var(--display); cursor: pointer; transition: background .15s, border-color .15s, transform .1s; }
+  .btn:hover { background: rgba(255, 240, 220, 0.08); border-color: rgba(255, 222, 190, 0.28); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--amber); color: #1d1208; border-color: transparent; font-weight: 600; }
+  .btn.primary:hover { background: #ffc063; }
+  .btn.icon { flex: none; width: 38px; padding: 8px 0; }
+
+  .group { margin-top: 22px; display: flex; flex-direction: column; gap: 12px; }
+  .group h2 { margin: 0; display: flex; align-items: center; gap: 10px; font: 500 10px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .group h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+  .seg button { appearance: none; border: 1px solid var(--line); border-radius: 9px; padding: 8px 4px; background: rgba(0, 0, 0, 0.2); color: var(--muted); font: 500 12.5px/1.1 var(--display); cursor: pointer; transition: all .15s; }
+  .seg button:hover { color: var(--text); border-color: var(--line-2); }
+  .seg button[aria-pressed="true"] { color: var(--amber); background: var(--amber-soft); border-color: rgba(255, 177, 61, 0.35); }
+
+  .field { display: grid; gap: 7px; }
+  .field .lab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; }
+  .field .lab small { color: var(--faint); font-size: 11.5px; }
+  output { font: 500 12px var(--mono); color: var(--amber); font-variant-numeric: tabular-nums; }
+
+  input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: transparent; margin: 0; cursor: pointer; }
+  input[type="range"]::-webkit-slider-runnable-track { height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--amber) var(--p, 50%), rgba(255, 222, 190, 0.14) var(--p, 50%)); }
+  input[type="range"]::-moz-range-track { height: 3px; border-radius: 3px; background: rgba(255, 222, 190, 0.14); }
+  input[type="range"]::-moz-range-progress { height: 3px; border-radius: 3px; background: var(--amber); }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5.5px; border-radius: 50%; background: var(--text); border: 3px solid var(--panel-solid); box-shadow: 0 0 0 1px var(--amber), 0 0 12px rgba(255, 177, 61, 0.5); }
+  input[type="range"]::-moz-range-thumb { width: 9px; height: 9px; border-radius: 50%; background: var(--text); border: 3px solid var(--panel-solid); box-shadow: 0 0 0 1px var(--amber), 0 0 12px rgba(255, 177, 61, 0.5); }
+
+  .switches { display: grid; gap: 9px; }
+  .switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; cursor: pointer; }
+  .switch .sw-l { display: flex; align-items: center; gap: 9px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .switch input { -webkit-appearance: none; appearance: none; width: 32px; height: 18px; border-radius: 18px; background: rgba(255, 222, 190, 0.12); position: relative; cursor: pointer; transition: background .2s; margin: 0; flex: none; }
+  .switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); transition: transform .2s, background .2s; }
+  .switch input:checked { background: rgba(255, 177, 61, 0.35); }
+  .switch input:checked::after { transform: translateX(14px); background: var(--amber); }
+
+  .note { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); max-width: 62ch; }
+  .note b { color: var(--text); font-weight: 600; }
+  .formula { margin: 0; font: 11.5px/1.7 var(--mono); color: var(--text); background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; overflow-x: auto; white-space: pre; }
+  .formula i { color: var(--amber); font-style: normal; }
+  .formula em { color: var(--muted); font-style: normal; }
+
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  .hud { position: fixed; z-index: 1; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; padding: 8px 14px; background: var(--panel); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 999px; font: 11px/1.2 var(--mono); color: var(--muted); pointer-events: none; }
+  #legend { right: 16px; bottom: 16px; }
+  #legend span { display: inline-flex; align-items: center; gap: 7px; }
+  #hint { right: 16px; top: 16px; }
+  #hint kbd { font: inherit; color: var(--text); padding: 1px 5px; border: 1px solid var(--line-2); border-radius: 4px; }
+
+  @media (max-width: 860px) {
+    #panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 70px; border-radius: 20px 20px 0 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom, 0px); transition: max-height .35s cubic-bezier(.2, .8, .2, 1); }
+    #panel.open { max-height: 78%; }
+    .brand { padding: 14px 16px; }
+    .sheet-toggle { display: block; }
+    #hint { display: none; }
+    #legend { top: calc(10px + env(safe-area-inset-top, 0px)); bottom: auto; left: 12px; right: 12px; justify-content: center; border-radius: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #panel, .tabs button, .seg button, .switch input::after { transition: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="stage" aria-label="Simulationsfläche"></canvas>
+
+<aside id="panel" aria-label="Steuerung">
+  <header class="brand">
+    <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+      <g fill="none" stroke="#ffb13d" stroke-width="1.3" stroke-linecap="round">
+        <path d="M14.6 7.4 11 3.2M17.4 7.4 21 3.2M14.4 14 8 11.5M17.6 14 24 11.5M14.4 16 7.5 19M17.6 16 24.5 19M14.8 18 10 25.5M17.2 18 22 25.5"/>
+      </g>
+      <g fill="#ffb13d"><ellipse cx="16" cy="9.2" rx="2.7" ry="2.5"/><ellipse cx="16" cy="15" rx="2" ry="2.9"/><ellipse cx="16" cy="23" rx="3.5" ry="4.8"/></g>
+    </svg>
+    <div>
+      <h1>Formica</h1>
+      <p>Ameisenalgorithmus · Simulator</p>
+    </div>
+    <button class="btn icon sheet-toggle" id="sheetToggle" aria-expanded="false" aria-controls="panel" aria-label="Steuerung öffnen">▴</button>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tabColony" data-tab="colony" aria-selected="true">Kolonie</button>
+    <button role="tab" id="tabTsp" data-tab="tsp" aria-selected="false">Rundreise (TSP)</button>
+  </nav>
+
+  <div class="panel-body">
+    <!-- ============ KOLONIE ============ -->
+    <section data-mode="colony">
+      <div class="stats">
+        <div class="stat"><div class="k">Eingesammelt</div><div class="v amber" id="sDelivered">0</div></div>
+        <div class="stat"><div class="k">Futter übrig</div><div class="v" id="sFood">0</div></div>
+        <div class="stat"><div class="k">Tragen Futter</div><div class="v" id="sCarry">0</div></div>
+        <div class="stat"><div class="k">Schritte</div><div class="v" id="sSteps">0</div></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-cap"><span>Lieferrate</span><span>je 100 Schritte</span></div>
+        <canvas class="chart" id="colChart"></canvas>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="colPlay">Pause</button>
+        <button class="btn" id="colReset">Neu starten</button>
+      </div>
+
+      <div class="group">
+        <h2>Szenario</h2>
+        <div class="seg" id="colPreset">
+          <button data-value="field" aria-pressed="true">Offenes Feld</button>
+          <button data-value="bridge" aria-pressed="false">Doppelbrücke</button>
+          <button data-value="maze" aria-pressed="false">Labyrinth</button>
+        </div>
+        <p class="note" id="presetNote"></p>
+      </div>
+
+      <div class="group">
+        <h2>Werkzeug</h2>
+        <div class="seg" id="colTool">
+          <button data-value="food" aria-pressed="true">Futter</button>
+          <button data-value="wall" aria-pressed="false">Wand</button>
+          <button data-value="erase" aria-pressed="false">Radierer</button>
+          <button data-value="nest" aria-pressed="false">Nest</button>
+        </div>
+        <label class="field"><span class="lab">Pinselgröße <output for="brush"></output></span><input type="range" id="brush" min="6" max="70" step="1"></label>
+      </div>
+
+      <div class="group">
+        <h2>Kolonie</h2>
+        <label class="field"><span class="lab">Ameisen <output for="antCount"></output></span><input type="range" id="antCount" min="50" max="4000" step="50"></label>
+        <label class="field"><span class="lab">Laufgeschwindigkeit <output for="antSpeed"></output></span><input type="range" id="antSpeed" min="0.5" max="3" step="0.1"></label>
+        <label class="field"><span class="lab">Simulationstempo <output for="simSpeed"></output></span><input type="range" id="simSpeed" min="1" max="10" step="1"></label>
+      </div>
+
+      <div class="group">
+        <h2>Verhalten</h2>
+        <label class="field"><span class="lab">Fühlerwinkel <output for="sensAngle"></output></span><input type="range" id="sensAngle" min="10" max="80" step="1"></label>
+        <label class="field"><span class="lab">Fühlerreichweite <output for="sensDist"></output></span><input type="range" id="sensDist" min="4" max="40" step="1"></label>
+        <label class="field"><span class="lab">Zufallsanteil <output for="wander"></output></span><input type="range" id="wander" min="0" max="1" step="0.05"></label>
+        <label class="field"><span class="lab">Verdunstung <small>pro Schritt</small> <output for="evap"></output></span><input type="range" id="evap" min="0.0005" max="0.02" step="0.0005"></label>
+        <label class="field"><span class="lab">Diffusion <output for="diffusion"></output></span><input type="range" id="diffusion" min="0" max="0.6" step="0.05"></label>
+      </div>
+
+      <div class="group">
+        <h2>Anzeige</h2>
+        <div class="switches">
+          <label class="switch"><span class="sw-l"><span class="dot" style="background:var(--indigo)"></span>Heimweg-Pheromon</span><input type="checkbox" id="showHome" checked></label>
+          <label class="switch"><span class="sw-l"><span class="dot" style="background:var(--amber)"></span>Futter-Pheromon</span><input type="checkbox" id="showFood" checked></label>
+          <label class="switch"><span class="sw-l"><span class="dot" style="background:var(--text)"></span>Ameisen</span><input type="checkbox" id="showAnts" checked></label>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>So funktioniert's</h2>
+        <p class="note">Jede Ameise kennt nur ihre Umgebung. Auf der Suche hinterlässt sie <b>Heimweg-Pheromon</b>, mit Futter im Maul <b>Futter-Pheromon</b>. Drei Fühler vergleichen die Konzentration links, vorne und rechts. Die Spur verdunstet, also bleiben nur Wege stark, die oft benutzt werden. Aus diesem indirekten Austausch über die Umgebung (Stigmergie) entstehen Straßen.</p>
+      </div>
+    </section>
+
+    <!-- ============ TSP ============ -->
+    <section data-mode="tsp" hidden>
+      <div class="stats">
+        <div class="stat"><div class="k">Beste Tour</div><div class="v amber" id="tBest">–</div></div>
+        <div class="stat"><div class="k">Iteration</div><div class="v" id="tIter">0</div></div>
+        <div class="stat"><div class="k">Gegenüber NN</div><div class="v" id="tNN">–</div></div>
+        <div class="stat"><div class="k" id="t4k">Zuletzt besser</div><div class="v" id="t4v">–</div></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-cap"><span>Tourlänge</span><span class="keys"><span style="color:var(--amber)">Beste</span><span style="color:var(--muted)">Mittel</span><span style="color:var(--indigo)">NN</span></span></div>
+        <canvas class="chart" id="tspChart"></canvas>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="tspPlay">Pause</button>
+        <button class="btn" id="tspStep">1 Schritt</button>
+        <button class="btn" id="tspReset">Zurücksetzen</button>
+      </div>
+
+      <div class="group">
+        <h2>Karte</h2>
+        <div class="seg" id="tspLayout">
+          <button data-value="random" aria-pressed="true">Zufällig</button>
+          <button data-value="cluster" aria-pressed="false">Cluster</button>
+          <button data-value="circle" aria-pressed="false">Kreis</button>
+        </div>
+        <label class="field"><span class="lab">Städte <output for="cityCount"></output></span><input type="range" id="cityCount" min="5" max="150" step="1"></label>
+        <button class="btn" id="tspNew">Neue Karte erzeugen</button>
+        <p class="note">Klick setzt eine Stadt, <b>Shift-Klick</b> oder Rechtsklick entfernt die nächste.</p>
+      </div>
+
+      <div class="group">
+        <h2>Algorithmus</h2>
+        <div class="seg" id="tspVariant">
+          <button data-value="as" aria-pressed="false">AS</button>
+          <button data-value="eas" aria-pressed="false">Elitär</button>
+          <button data-value="mmas" aria-pressed="true">MAX-MIN</button>
+        </div>
+        <p class="note" id="variantNote"></p>
+        <label class="field"><span class="lab">Ameisen pro Iteration <output for="tspAnts"></output></span><input type="range" id="tspAnts" min="1" max="150" step="1"></label>
+        <label class="field"><span class="lab">α <small>Gewicht Pheromon</small> <output for="alpha"></output></span><input type="range" id="alpha" min="0" max="5" step="0.1"></label>
+        <label class="field"><span class="lab">β <small>Gewicht Distanz</small> <output for="beta"></output></span><input type="range" id="beta" min="0" max="8" step="0.1"></label>
+        <label class="field"><span class="lab">ρ <small>Verdunstung</small> <output for="rho"></output></span><input type="range" id="rho" min="0.01" max="0.9" step="0.01"></label>
+        <label class="field"><span class="lab">Iterationen / Sekunde <output for="ips"></output></span><input type="range" id="ips" min="1" max="60" step="1"></label>
+      </div>
+
+      <div class="group">
+        <h2>Anzeige</h2>
+        <div class="switches">
+          <label class="switch"><span class="sw-l"><span class="dot" style="background:var(--amber)"></span>Pheromon auf Kanten</span><input type="checkbox" id="showPh" checked></label>
+          <label class="switch"><span class="sw-l"><span class="dot" style="background:var(--honey)"></span>Beste Tour</span><input type="checkbox" id="showBest" checked></label>
+          <label class="switch"><span class="sw-l"><span class="dot" style="background:var(--text)"></span>Ameisen auf der Tour</span><input type="checkbox" id="showTspAnts" checked></label>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>Übergangsregel</h2>
+<pre class="formula">p(i→j) = <i>τᵢⱼ</i>^α · <i>ηᵢⱼ</i>^β
+         ───────────────
+         Σₖ τᵢₖ^α · ηᵢₖ^β
+
+<em>η = 1 / Distanz  ·  τ ← (1−ρ)·τ + Δτ</em></pre>
+        <p class="note">Jede Ameise baut eine Rundreise Stadt für Stadt. Kurze und stark markierte Kanten werden bevorzugt. Nach jeder Iteration verdunstet Pheromon, gute Touren legen neues ab. So sammelt sich die Erfahrung der Kolonie auf den Kanten.</p>
+      </div>
+    </section>
+  </div>
+</aside>
+
+<div class="hud" id="legend"></div>
+<div class="hud" id="hint"></div>
+
+<script>
+(() => {
+'use strict';
+
+const $ = (s) => document.querySelector(s);
+const cv = $('#stage');
+const ctx = cv.getContext('2d');
+const panel = $('#panel');
+const TAU = Math.PI * 2;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let W = 0, H = 0, DPR = 1;
+let mode = 'colony';
+let frameNo = 0;
+const isMobile = () => W <= 860;
+
+function makeCanvas(w = 1, h = 1) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const fmt = (n) => Math.round(n).toLocaleString('de-DE');
+
+/* Rectangle available for the simulation, clear of the panel and legend. */
+function stage() {
+  if (isMobile()) return { x: 12, y: 60, w: W - 24, h: Math.max(140, H - 60 - 84) };
+  const r = panel.getBoundingClientRect();
+  const x = Math.round(r.right + 20);
+  return { x, y: 64, w: Math.max(240, W - x - 20), h: Math.max(200, H - 64 - 64) };
+}
+
+/* ---------------- background ---------------- */
+const bg = makeCanvas();
+const bgx = bg.getContext('2d');
+function buildBackground() {
+  bg.width = W * DPR; bg.height = H * DPR;
+  bgx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const g = bgx.createRadialGradient(W * 0.62, H * 0.45, 0, W * 0.62, H * 0.45, Math.hypot(W, H) * 0.72);
+  g.addColorStop(0, '#1e1611');
+  g.addColorStop(0.5, '#140e0b');
+  g.addColorStop(1, '#070504');
+  bgx.fillStyle = g; bgx.fillRect(0, 0, W, H);
+  const gs = 160, n = makeCanvas(gs, gs), nx = n.getContext('2d'), id = nx.createImageData(gs, gs);
+  for (let i = 0; i < gs * gs; i++) {
+    const v = 150 + Math.random() * 105;
+    id.data[i * 4] = v; id.data[i * 4 + 1] = v * 0.9; id.data[i * 4 + 2] = v * 0.78; id.data[i * 4 + 3] = Math.random() * 16;
+  }
+  nx.putImageData(id, 0, 0);
+  bgx.fillStyle = bgx.createPattern(n, 'repeat');
+  bgx.fillRect(0, 0, W, H);
+}
+
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+
+function drawStageFrame(label) {
+  const s = stage();
+  ctx.save();
+  roundRect(ctx, s.x + 0.5, s.y + 0.5, s.w - 1, s.h - 1, 14);
+  ctx.strokeStyle = 'rgba(255,222,190,0.08)'; ctx.lineWidth = 1; ctx.stroke();
+  // corner ticks
+  ctx.strokeStyle = 'rgba(255,177,61,0.35)';
+  const t = 10;
+  ctx.beginPath();
+  ctx.moveTo(s.x - 6, s.y + t); ctx.lineTo(s.x - 6, s.y - 6); ctx.lineTo(s.x + t, s.y - 6);
+  ctx.moveTo(s.x + s.w + 6, s.y + s.h - t); ctx.lineTo(s.x + s.w + 6, s.y + s.h + 6); ctx.lineTo(s.x + s.w - t, s.y + s.h + 6);
+  ctx.stroke();
+  ctx.font = '500 10px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.fillStyle = 'rgba(168,146,124,0.75)';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(label, s.x + 2, s.y - 14);
+  ctx.restore();
+}
+
+/* =====================================================================
+   KOLONIE: foraging with two pheromone fields
+   ===================================================================== */
+const CELL = 4;
+const MAXANTS = 4000;
+const C = {
+  gw: 0, gh: 0, phHome: null, phFood: null, tmp: null, wall: null, food: null, grain: null,
+  x: new Float32Array(MAXANTS), y: new Float32Array(MAXANTS), a: new Float32Array(MAXANTS),
+  carry: new Uint8Array(MAXANTS), t: new Float32Array(MAXANTS), n: 0,
+  nest: { x: 0, y: 0, r: 16 }, delivered: 0, foodLeft: 0, steps: 0,
+  rate: [], rateLast: 0, running: !reduceMotion, preset: 'field', wallDirty: true, carrying: 0,
+};
+const P = {
+  ants: 900, speed: 1.3, stepsPerFrame: 2, sensorAngle: 35 * Math.PI / 180, sensorDist: 14,
+  turn: 0.32, wander: 0.3, evap: 0.0025, diffusion: 0.15, deposit: 1,
+  showHome: true, showFood: true, showAnts: true, tool: 'food', brush: 20,
+};
+const DEPLUT = new Float32Array(4096);
+for (let i = 0; i < 4096; i++) DEPLUT[i] = Math.exp(-i * 0.0008);
+
+const phCanvas = makeCanvas(), phCtx = phCanvas.getContext('2d');
+let phImg = null;
+const bloom1 = makeCanvas(), b1x = bloom1.getContext('2d');
+const bloom2 = makeCanvas(), b2x = bloom2.getContext('2d');
+const wallMask = makeCanvas(), wmCtx = wallMask.getContext('2d');
+let wmImg = null;
+const wallLayer = makeCanvas(), wlx = wallLayer.getContext('2d');
+
+function initColonyGrid() {
+  C.gw = Math.ceil(W / CELL) + 1;
+  C.gh = Math.ceil(H / CELL) + 1;
+  const N = C.gw * C.gh;
+  C.phHome = new Float32Array(N); C.phFood = new Float32Array(N); C.tmp = new Float32Array(N);
+  C.wall = new Uint8Array(N); C.food = new Uint16Array(N); C.grain = new Int8Array(N);
+  for (let i = 0; i < N; i++) C.grain[i] = (Math.random() * 14 - 7) | 0;
+  phCanvas.width = C.gw; phCanvas.height = C.gh; phImg = phCtx.createImageData(C.gw, C.gh);
+  wallMask.width = C.gw; wallMask.height = C.gh; wmImg = wmCtx.createImageData(C.gw, C.gh);
+  bloom1.width = Math.max(1, C.gw >> 1); bloom1.height = Math.max(1, C.gh >> 1);
+  bloom2.width = Math.max(1, C.gw >> 3); bloom2.height = Math.max(1, C.gh >> 3);
+  wallLayer.width = W * DPR; wallLayer.height = H * DPR;
+}
+
+/* grid painting helpers (pixel coordinates) */
+function fillAll(v) { C.wall.fill(v); }
+function fillRect(x, y, w, h, v) {
+  const x0 = clamp(Math.floor(x / CELL), 0, C.gw - 1), x1 = clamp(Math.ceil((x + w) / CELL), 0, C.gw);
+  const y0 = clamp(Math.floor(y / CELL), 0, C.gh - 1), y1 = clamp(Math.ceil((y + h) / CELL), 0, C.gh);
+  for (let gy = y0; gy < y1; gy++) for (let gx = x0; gx < x1; gx++) C.wall[gy * C.gw + gx] = v;
+}
+function eachCellInBlob(cx, cy, r, wobble, fn) {
+  const seed = Math.random() * 10;
+  const R = r * (1 + wobble);
+  const x0 = Math.max(1, Math.floor((cx - R) / CELL)), x1 = Math.min(C.gw - 2, Math.ceil((cx + R) / CELL));
+  const y0 = Math.max(1, Math.floor((cy - R) / CELL)), y1 = Math.min(C.gh - 2, Math.ceil((cy + R) / CELL));
+  for (let gy = y0; gy <= y1; gy++) for (let gx = x0; gx <= x1; gx++) {
+    const dx = (gx + 0.5) * CELL - cx, dy = (gy + 0.5) * CELL - cy;
+    const ang = Math.atan2(dy, dx);
+    const rr = r * (1 + wobble * (0.55 * Math.sin(ang * 3 + seed) + 0.45 * Math.sin(ang * 5 - seed * 1.7)));
+    if (dx * dx + dy * dy <= rr * rr) fn(gy * C.gw + gx);
+  }
+}
+function foodBlob(x, y, r, amt = 24) { eachCellInBlob(x, y, r, 0.18, (i) => { if (!C.wall[i]) C.food[i] = amt; }); }
+function wallBlob(x, y, r) { eachCellInBlob(x, y, r, 0.22, (i) => { C.wall[i] = 1; C.food[i] = 0; }); }
+function clearAround(x, y, r) { eachCellInBlob(x, y, r, 0, (i) => { if (C.wall[i] === 1) C.wall[i] = 0; }); }
+
+const PRESET_NOTES = {
+  field: 'Drei Futterquellen und ein paar Steine. Aus zufälliger Suche werden nach kurzer Zeit feste Ameisenstraßen.',
+  bridge: 'Zwei Brücken führen zum Futter, eine ist etwa halb so lang. Auf dem kurzen Weg kommen Ameisen öfter vorbei und markieren ihn stärker, bis fast alle ihn nehmen. Nach dem Experiment von Deneubourg et al., 1990.',
+  maze: 'Das Nest liegt in der Mitte, Futter in zwei Ecken. Einige Gänge bilden Schleifen. Mit der Zeit bleibt die Spur auf den kürzesten Wegen durch das Labyrinth.',
+};
+
+const PRESETS = {
+  field() {
+    const s = stage(), m = Math.min(s.w, s.h);
+    fillAll(2); fillRect(s.x, s.y, s.w, s.h, 0);
+    C.nest = { x: s.x + s.w * 0.2, y: s.y + s.h * 0.56, r: 16 };
+    wallBlob(s.x + s.w * 0.5, s.y + s.h * 0.46, m * 0.09);
+    wallBlob(s.x + s.w * 0.68, s.y + s.h * 0.62, m * 0.05);
+    wallBlob(s.x + s.w * 0.36, s.y + s.h * 0.22, m * 0.045);
+    foodBlob(s.x + s.w * 0.8, s.y + s.h * 0.22, m * 0.065);
+    foodBlob(s.x + s.w * 0.86, s.y + s.h * 0.74, m * 0.055);
+    foodBlob(s.x + s.w * 0.46, s.y + s.h * 0.86, m * 0.045);
+  },
+  bridge() {
+    const s = stage(), w = s.w, h = s.h, t = clamp(Math.min(w, h) * 0.05, 22, 34);
+    fillAll(2); fillRect(s.x, s.y, s.w, s.h, 1);
+    fillRect(s.x + 0.04 * w, s.y + 0.26 * h, 0.16 * w, 0.36 * h, 0);
+    fillRect(s.x + 0.80 * w, s.y + 0.26 * h, 0.16 * w, 0.36 * h, 0);
+    fillRect(s.x + 0.2 * w - 4, s.y + 0.30 * h, 0.6 * w + 8, t, 0);
+    fillRect(s.x + 0.1 * w, s.y + 0.62 * h - 4, t, 0.28 * h + 4, 0);
+    fillRect(s.x + 0.1 * w, s.y + 0.90 * h - t, 0.8 * w, t, 0);
+    fillRect(s.x + 0.9 * w - t, s.y + 0.62 * h - 4, t, 0.28 * h + 4, 0);
+    C.nest = { x: s.x + 0.12 * w, y: s.y + 0.46 * h, r: 14 };
+    foodBlob(s.x + 0.88 * w, s.y + 0.46 * h, Math.min(0.055 * w, 0.12 * h));
+  },
+  maze() {
+    const s = stage();
+    const cs = clamp(Math.floor(Math.min(s.w, s.h) / 4.5), 60, 112);
+    const cols = Math.max(3, Math.floor(s.w / cs)), rows = Math.max(3, Math.floor(s.h / cs));
+    const ox = s.x + (s.w - cols * cs) / 2, oy = s.y + (s.h - rows * cs) / 2;
+    const t = cs * 0.15;
+    fillAll(2); fillRect(s.x, s.y, s.w, s.h, 1);
+    const seen = new Uint8Array(cols * rows);
+    const carveCell = (c, r) => fillRect(ox + c * cs + t, oy + r * cs + t, cs - 2 * t, cs - 2 * t, 0);
+    const carveLink = (c, r, c2, r2) => {
+      const x = Math.min(c, c2), y = Math.min(r, r2);
+      if (c !== c2) fillRect(ox + x * cs + t, oy + y * cs + t, 2 * cs - 2 * t, cs - 2 * t, 0);
+      else fillRect(ox + x * cs + t, oy + y * cs + t, cs - 2 * t, 2 * cs - 2 * t, 0);
+    };
+    const mc = cols >> 1, mr = rows >> 1;
+    const stack = [[mc, mr]]; seen[mr * cols + mc] = 1; carveCell(mc, mr);
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    while (stack.length) {
+      const [c, r] = stack[stack.length - 1];
+      const opts = dirs.map(([dx, dy]) => [c + dx, r + dy]).filter(([a, b]) => a >= 0 && b >= 0 && a < cols && b < rows && !seen[b * cols + a]);
+      if (!opts.length) { stack.pop(); continue; }
+      const [nc, nr] = opts[(Math.random() * opts.length) | 0];
+      seen[nr * cols + nc] = 1; carveCell(nc, nr); carveLink(c, r, nc, nr); stack.push([nc, nr]);
+    }
+    // a few extra openings create loops, so there is more than one route
+    const extra = Math.round(cols * rows * 0.16);
+    for (let k = 0; k < extra; k++) {
+      const c = (Math.random() * cols) | 0, r = (Math.random() * rows) | 0;
+      const [dx, dy] = dirs[(Math.random() * 4) | 0];
+      const nc = c + dx, nr = r + dy;
+      if (nc >= 0 && nr >= 0 && nc < cols && nr < rows) carveLink(c, r, nc, nr);
+    }
+    C.nest = { x: ox + (mc + 0.5) * cs, y: oy + (mr + 0.5) * cs, r: Math.min(14, cs * 0.24) };
+    foodBlob(ox + 0.5 * cs, oy + 0.5 * cs, cs * 0.28);
+    foodBlob(ox + (cols - 0.5) * cs, oy + (rows - 0.5) * cs, cs * 0.28);
+  },
+};
+
+function spawnAnt(i) {
+  const ang = Math.random() * TAU, rr = Math.random() * C.nest.r * 0.7;
+  C.x[i] = C.nest.x + Math.cos(ang) * rr; C.y[i] = C.nest.y + Math.sin(ang) * rr;
+  C.a[i] = ang; C.carry[i] = 0; C.t[i] = 0;
+}
+function setAntCount(n) {
+  n = Math.min(MAXANTS, n);
+  for (let i = C.n; i < n; i++) spawnAnt(i);
+  C.n = n;
+}
+
+function resetColony() {
+  C.phHome.fill(0); C.phFood.fill(0); C.food.fill(0);
+  C.delivered = 0; C.steps = 0; C.rate = []; C.rateLast = 0;
+  PRESETS[C.preset]();
+  let f = 0; for (let i = 0; i < C.food.length; i++) f += C.food[i];
+  C.foodLeft = f;
+  C.n = 0; setAntCount(P.ants);
+  C.wallDirty = true;
+}
+
+function sense(arr, sx, sy, k) {
+  const gw = C.gw;
+  const gx = (sx / CELL) | 0, gy = (sy / CELL) | 0;
+  if (sx < CELL || sy < CELL || gx >= gw - 1 || gy >= C.gh - 1) return -1;
+  const c = gy * gw + gx;
+  if (C.wall[c]) return -1;
+  let s = arr[c] * 2 + arr[c - 1] + arr[c + 1] + arr[c - gw] + arr[c + gw];
+  if (!k) {
+    const f = C.food;
+    if (f[c] | f[c - 1] | f[c + 1] | f[c - gw] | f[c + gw]) s += 40;
+  } else {
+    const dx = sx - C.nest.x, dy = sy - C.nest.y, R = C.nest.r + 70, d2 = dx * dx + dy * dy;
+    if (d2 < R * R) s += 60 * (1 - Math.sqrt(d2) / R);
+  }
+  return s;
+}
+
+function stepColony() {
+  const gw = C.gw, wall = C.wall, food = C.food, nest = C.nest;
+  const home = C.phHome, fph = C.phFood;
+  const sa = P.sensorAngle, sd = P.sensorDist, sp = P.speed, turn = P.turn, wander = P.wander, dep = P.deposit * 0.12;
+  const X = C.x, Y = C.y, A = C.a, K = C.carry, Tm = C.t;
+  const nr2 = nest.r * nest.r;
+  const minX = CELL + 1, minY = CELL + 1, maxX = (gw - 1) * CELL - 1, maxY = (C.gh - 1) * CELL - 1;
+  for (let i = 0; i < C.n; i++) {
+    const x = X[i], y = Y[i]; let a = A[i]; const k = K[i];
+    const arr = k ? home : fph;
+    const L = sense(arr, x + Math.cos(a - sa) * sd, y + Math.sin(a - sa) * sd, k);
+    const F = sense(arr, x + Math.cos(a) * sd, y + Math.sin(a) * sd, k);
+    const R = sense(arr, x + Math.cos(a + sa) * sd, y + Math.sin(a + sa) * sd, k);
+    if (F < L || F < R) {
+      if (L > R) a -= turn; else if (R > L) a += turn; else a += Math.random() < 0.5 ? -turn : turn;
+    }
+    a += (Math.random() - 0.5) * wander;
+    let nx = x + Math.cos(a) * sp, ny = y + Math.sin(a) * sp;
+    if (nx < minX || nx > maxX) { a = Math.PI - a; nx = x; }
+    if (ny < minY || ny > maxY) { a = -a; ny = y; }
+    const ci = ((y / CELL) | 0) * gw + ((x / CELL) | 0);
+    const gi = ((ny / CELL) | 0) * gw + ((nx / CELL) | 0);
+    if (wall[gi] && !wall[ci]) { A[i] = a + Math.PI * (0.65 + Math.random() * 0.7); continue; }
+    X[i] = nx; Y[i] = ny;
+
+    let kk = k;
+    if (!kk) {
+      if (food[gi] > 0) { food[gi]--; C.foodLeft--; kk = 1; a += Math.PI; Tm[i] = 0; }
+      else { const dx = nx - nest.x, dy = ny - nest.y; if (dx * dx + dy * dy < nr2) Tm[i] = 0; }
+    } else {
+      const dx = nx - nest.x, dy = ny - nest.y;
+      if (dx * dx + dy * dy < nr2) { kk = 0; C.delivered++; a += Math.PI; Tm[i] = 0; }
+    }
+    K[i] = kk; A[i] = a;
+
+    const tt = Tm[i];
+    const s = dep * DEPLUT[tt < 4095 ? tt | 0 : 4095];
+    const tgt = kk ? fph : home;
+    const v = tgt[gi] + s;
+    tgt[gi] = v > 40 ? 40 : v;
+    Tm[i] = tt + 1;
+  }
+  evapDiffuse();
+  C.steps++;
+  if (C.steps % 100 === 0) {
+    C.rate.push(C.delivered - C.rateLast); C.rateLast = C.delivered;
+    if (C.rate.length > 120) C.rate.shift();
+  }
+}
+
+function evapDiffuse() {
+  const gw = C.gw, gh = C.gh, wall = C.wall;
+  const k = 1 - P.evap, d = P.diffusion * 0.25, dd = 1 - P.diffusion;
+  for (let pass = 0; pass < 2; pass++) {
+    const src = pass ? C.phFood : C.phHome, dst = C.tmp;
+    for (let y = 1; y < gh - 1; y++) {
+      let i = y * gw + 1;
+      for (let x = 1; x < gw - 1; x++, i++) {
+        if (wall[i]) { dst[i] = 0; continue; }
+        const v = (src[i] * dd + (src[i - 1] + src[i + 1] + src[i - gw] + src[i + gw]) * d) * k;
+        dst[i] = v < 0.0004 ? 0 : v;
+      }
+    }
+    C.tmp = src;
+    if (pass) C.phFood = dst; else C.phHome = dst;
+  }
+}
+
+function renderWalls() {
+  const N = C.gw * C.gh, d = wmImg.data, wall = C.wall, grain = C.grain;
+  for (let i = 0, j = 0; i < N; i++, j += 4) {
+    if (wall[i] === 1) {
+      const n = grain[i];
+      d[j] = 62 + n; d[j + 1] = 48 + n; d[j + 2] = 38 + n * 0.8; d[j + 3] = 255;
+    } else d[j + 3] = 0;
+  }
+  wmCtx.putImageData(wmImg, 0, 0);
+  wlx.setTransform(1, 0, 0, 1, 0, 0);
+  wlx.clearRect(0, 0, wallLayer.width, wallLayer.height);
+  wlx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  wlx.imageSmoothingEnabled = true;
+  wlx.save();
+  wlx.shadowColor = 'rgba(0,0,0,0.75)'; wlx.shadowBlur = 18 * DPR; wlx.shadowOffsetY = 5 * DPR;
+  wlx.drawImage(wallMask, 0, 0, C.gw * CELL, C.gh * CELL);
+  wlx.restore();
+  // soft top light on the rock
+  wlx.save();
+  wlx.globalCompositeOperation = 'source-atop';
+  const g = wlx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, 'rgba(255,210,160,0.07)'); g.addColorStop(1, 'rgba(0,0,0,0.12)');
+  wlx.fillStyle = g; wlx.fillRect(0, 0, W, H);
+  wlx.restore();
+  C.wallDirty = false;
+}
+
+function renderPheromones() {
+  const N = C.gw * C.gh, d = phImg.data;
+  const home = C.phHome, fph = C.phFood, food = C.food;
+  const sh = P.showHome ? 1 : 0, sf = P.showFood ? 1 : 0;
+  for (let i = 0, j = 0; i < N; i++, j += 4) {
+    const hr = home[i] * sh, fr = fph[i] * sf, m = food[i];
+    if (hr === 0 && fr === 0 && m === 0) { d[j + 3] = 0; continue; }
+    const h = hr > 0 ? 0.62 * (1 - Math.exp(-hr * 0.18)) : 0;
+    const f = fr > 0 ? 1 - Math.exp(-fr * 0.45) : 0;
+    let r = 133 * h + 255 * f, g = 149 * h + 150 * f, b = 255 * h + 36 * f, a = h > f ? h : f;
+    if (m) { const q = 0.45 + 0.4 * Math.min(1, m / 24); r += 250 * q; g += 205 * q; b += 120 * q; if (q > a) a = q; }
+    const inv = 1 / a;
+    d[j] = Math.min(255, r * inv); d[j + 1] = Math.min(255, g * inv); d[j + 2] = Math.min(255, b * inv); d[j + 3] = Math.min(255, a * 255);
+  }
+  phCtx.putImageData(phImg, 0, 0);
+  const pw = C.gw * CELL, ph = C.gh * CELL;
+  b1x.clearRect(0, 0, bloom1.width, bloom1.height); b1x.drawImage(phCanvas, 0, 0, bloom1.width, bloom1.height);
+  b2x.clearRect(0, 0, bloom2.width, bloom2.height); b2x.drawImage(bloom1, 0, 0, bloom2.width, bloom2.height);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.globalAlpha = 0.5; ctx.drawImage(bloom2, 0, 0, pw, ph);
+  ctx.globalAlpha = 0.35; ctx.drawImage(bloom1, 0, 0, pw, ph);
+  ctx.globalAlpha = 0.85; ctx.drawImage(phCanvas, 0, 0, pw, ph);
+  ctx.restore();
+}
+
+let clock = 0;
+function drawNest() {
+  const { x, y, r } = C.nest;
+  const recent = C.rate.length ? C.rate[C.rate.length - 1] : 0;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r * 4);
+  g.addColorStop(0, 'rgba(133,149,255,0.35)'); g.addColorStop(1, 'rgba(133,149,255,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 4, 0, TAU); ctx.fill();
+  // ripples: brighter when food arrives often
+  const strength = 0.12 + Math.min(0.45, recent * 0.02);
+  for (let k = 0; k < 2; k++) {
+    const p = ((clock * 0.35 + k * 0.5) % 1);
+    ctx.strokeStyle = `rgba(133,149,255,${(strength * (1 - p)).toFixed(3)})`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(x, y, r + p * r * 2.6, 0, TAU); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.save();
+  ctx.fillStyle = '#120d12';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(160,172,255,0.85)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.setLineDash([2, 4]); ctx.lineDashOffset = -clock * 6;
+  ctx.strokeStyle = 'rgba(160,172,255,0.45)';
+  ctx.beginPath(); ctx.arc(x, y, r * 0.58, 0, TAU); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = '500 9.5px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.fillStyle = 'rgba(190,198,255,0.8)'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('NEST', x, y + r + 7);
+  ctx.restore();
+}
+
+function drawAnts() {
+  const X = C.x, Y = C.y, A = C.a, K = C.carry, n = C.n;
+  const len = 2.3;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 1.7;
+  ctx.strokeStyle = 'rgba(236,222,202,0.92)';
+  ctx.beginPath();
+  let carrying = 0;
+  for (let i = 0; i < n; i++) {
+    if (K[i]) { carrying++; continue; }
+    const c = Math.cos(A[i]) * len, s = Math.sin(A[i]) * len;
+    ctx.moveTo(X[i] - c, Y[i] - s); ctx.lineTo(X[i] + c, Y[i] + s);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,210,150,0.95)';
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    if (!K[i]) continue;
+    const c = Math.cos(A[i]) * len, s = Math.sin(A[i]) * len;
+    ctx.moveTo(X[i] - c, Y[i] - s); ctx.lineTo(X[i] + c, Y[i] + s);
+  }
+  ctx.stroke();
+  ctx.fillStyle = '#ffe9b8';
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    if (!K[i]) continue;
+    const hx = X[i] + Math.cos(A[i]) * (len + 1.4), hy = Y[i] + Math.sin(A[i]) * (len + 1.4);
+    ctx.moveTo(hx + 1.5, hy); ctx.arc(hx, hy, 1.5, 0, TAU);
+  }
+  ctx.fill();
+  ctx.restore();
+  C.carrying = carrying;
+}
+
+function drawBrush() {
+  if (!pointer.inside || isMobile()) return;
+  ctx.save();
+  if (P.tool === 'nest') {
+    ctx.strokeStyle = 'rgba(160,172,255,0.5)';
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.arc(pointer.x, pointer.y, C.nest.r, 0, TAU); ctx.stroke();
+  } else {
+    const col = P.tool === 'food' ? '255,226,160' : P.tool === 'wall' ? '200,170,140' : '241,230,214';
+    ctx.strokeStyle = `rgba(${col},0.55)`;
+    ctx.setLineDash(P.tool === 'erase' ? [2, 4] : []);
+    ctx.beginPath(); ctx.arc(pointer.x, pointer.y, P.brush, 0, TAU); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function renderColony() {
+  ctx.drawImage(bg, 0, 0, W, H);
+  renderPheromones();
+  if (C.wallDirty) renderWalls();
+  ctx.drawImage(wallLayer, 0, 0, W, H);
+  drawStageFrame(`FORMIKARIUM  ·  ${C.gw}×${C.gh} ZELLEN  ·  ${fmt(C.n)} AMEISEN`);
+  drawNest();
+  if (P.showAnts) drawAnts(); else { let c = 0; for (let i = 0; i < C.n; i++) c += C.carry[i]; C.carrying = c; }
+  drawBrush();
+}
+
+function paintAt(px, py) {
+  if (P.tool === 'nest') {
+    const s = stage();
+    C.nest.x = clamp(px, s.x + C.nest.r, s.x + s.w - C.nest.r);
+    C.nest.y = clamp(py, s.y + C.nest.r, s.y + s.h - C.nest.r);
+    clearAround(C.nest.x, C.nest.y, C.nest.r + 6);
+    C.wallDirty = true;
+    return;
+  }
+  const r = P.brush, gw = C.gw;
+  const x0 = Math.max(1, Math.floor((px - r) / CELL)), x1 = Math.min(gw - 2, Math.ceil((px + r) / CELL));
+  const y0 = Math.max(1, Math.floor((py - r) / CELL)), y1 = Math.min(C.gh - 2, Math.ceil((py + r) / CELL));
+  for (let gy = y0; gy <= y1; gy++) for (let gx = x0; gx <= x1; gx++) {
+    const dx = (gx + 0.5) * CELL - px, dy = (gy + 0.5) * CELL - py;
+    if (dx * dx + dy * dy > r * r) continue;
+    const i = gy * gw + gx;
+    if (C.wall[i] === 2) continue;
+    if (P.tool === 'food') {
+      if (!C.wall[i] && C.food[i] < 24) { C.foodLeft += 24 - C.food[i]; C.food[i] = 24; }
+    } else if (P.tool === 'wall') {
+      const ndx = (gx + 0.5) * CELL - C.nest.x, ndy = (gy + 0.5) * CELL - C.nest.y;
+      if (ndx * ndx + ndy * ndy < (C.nest.r + 6) ** 2) continue;
+      C.wall[i] = 1; C.foodLeft -= C.food[i]; C.food[i] = 0; C.phHome[i] = 0; C.phFood[i] = 0; C.wallDirty = true;
+    } else if (P.tool === 'erase') {
+      if (C.wall[i] === 1) { C.wall[i] = 0; C.wallDirty = true; }
+      C.foodLeft -= C.food[i]; C.food[i] = 0;
+    }
+  }
+}
+
+/* =====================================================================
+   RUNDREISE: Ant Colony Optimization for the TSP
+   ===================================================================== */
+const T = {
+  world: { w: 1000, h: 1000 }, cities: [], n: 0,
+  dist: null, eta: null, tau: null, choice: null, probs: null, visited: null, tours: null, lens: null,
+  best: null, bestLen: Infinity, iterBest: null, iterBestLen: Infinity,
+  iter: 0, hist: [], nnLen: 0, optimum: null, lastImprove: 0, lastRestart: 0,
+  running: !reduceMotion, acc: 0, phase: 0,
+};
+const TP = { n: 45, ants: 30, alpha: 1, beta: 3, rho: 0.1, variant: 'mmas', ips: 15, layout: 'random', showPh: true, showBest: true, showAnts: true };
+
+const VARIANT_NOTES = {
+  as: '<b>Ant System</b> (Dorigo, 1992). Jede Ameise legt auf ihrer Tour Pheromon im Umfang 1/L ab.',
+  eas: '<b>Elitäres Ant System.</b> Zusätzlich zu allen Ameisen verstärkt die beste bisher gefundene Tour ihre Kanten mit dem Gewicht n.',
+  mmas: '<b>MAX-MIN Ant System</b> (Stützle &amp; Hoos, 2000). Nur die beste Tour markiert, τ bleibt zwischen τmin und τmax. Bei Stillstand wird neu initialisiert.',
+};
+
+function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+
+function genCities() {
+  const s = stage();
+  const A = s.w / s.h;
+  T.world = { w: 1000 * A, h: 1000 };
+  const { w, h } = T.world, n = TP.n, m = 50, cs = [];
+  T.optimum = null;
+  if (TP.layout === 'circle') {
+    const R = Math.min(w, h) * 0.44;
+    for (let i = 0; i < n; i++) { const a = i / n * TAU - Math.PI / 2; cs.push({ x: w / 2 + Math.cos(a) * R, y: h / 2 + Math.sin(a) * R }); }
+    for (let i = n - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [cs[i], cs[j]] = [cs[j], cs[i]]; }
+    T.optimum = n * 2 * R * Math.sin(Math.PI / n);
+  } else if (TP.layout === 'cluster') {
+    const k = clamp(Math.round(n / 9), 3, 7), centers = [];
+    for (let i = 0; i < k; i++) centers.push({ x: m + 90 + Math.random() * (w - 2 * m - 180), y: m + 90 + Math.random() * (h - 2 * m - 180) });
+    for (let i = 0; i < n; i++) {
+      const c = centers[i % k];
+      cs.push({ x: clamp(c.x + gauss() * 55, m, w - m), y: clamp(c.y + gauss() * 55, m, h - m) });
+    }
+  } else {
+    const minD = Math.sqrt(w * h / n) * 0.5;
+    let tries = 0;
+    while (cs.length < n && tries < n * 400) {
+      tries++;
+      const p = { x: m + Math.random() * (w - 2 * m), y: m + Math.random() * (h - 2 * m) };
+      if (tries < n * 300 && cs.some((q) => (q.x - p.x) ** 2 + (q.y - p.y) ** 2 < minD * minD)) continue;
+      cs.push(p);
+    }
+  }
+  T.cities = cs;
+  setupACO();
+}
+
+function setupACO() {
+  const n = T.cities.length;
+  T.n = n;
+  T.best = null; T.bestLen = Infinity; T.iterBest = null; T.iterBestLen = Infinity;
+  T.iter = 0; T.hist = []; T.lastImprove = 0; T.lastRestart = 0; T.acc = 0;
+  if (n < 3) { T.tau = null; T.nnLen = 0; return; }
+  T.dist = new Float64Array(n * n); T.eta = new Float64Array(n * n);
+  T.tau = new Float64Array(n * n); T.choice = new Float64Array(n * n);
+  T.probs = new Float64Array(n); T.visited = new Uint8Array(n);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const d = Math.hypot(T.cities[i].x - T.cities[j].x, T.cities[i].y - T.cities[j].y);
+    T.dist[i * n + j] = d; T.eta[i * n + j] = i === j ? 0 : 1 / Math.max(d, 1e-6);
+  }
+  // nearest-neighbour tour as reference and for tau0
+  const vis = new Uint8Array(n); let cur = 0, len = 0; vis[0] = 1;
+  for (let s = 1; s < n; s++) {
+    let bj = -1, bd = Infinity;
+    for (let j = 0; j < n; j++) if (!vis[j] && T.dist[cur * n + j] < bd) { bd = T.dist[cur * n + j]; bj = j; }
+    vis[bj] = 1; len += bd; cur = bj;
+  }
+  len += T.dist[cur * n];
+  T.nnLen = len;
+  T.tau.fill(initialTau());
+}
+
+function initialTau() {
+  const n = T.n, m = TP.ants, L = T.nnLen;
+  if (TP.variant === 'as') return m / L;
+  if (TP.variant === 'eas') return (n + m) / (TP.rho * L);
+  return 1 / (TP.rho * L);
+}
+
+function buildTour(start, tour) {
+  const n = T.n, choice = T.choice, dist = T.dist, probs = T.probs, visited = T.visited;
+  visited.fill(0);
+  let cur = start, len = 0;
+  tour[0] = cur; visited[cur] = 1;
+  for (let s = 1; s < n; s++) {
+    const row = cur * n;
+    let sum = 0, lastOk = -1;
+    for (let j = 0; j < n; j++) {
+      const v = visited[j] ? 0 : choice[row + j];
+      probs[j] = v; sum += v;
+      if (!visited[j]) lastOk = j;
+    }
+    let next = -1;
+    if (sum > 0) {
+      let r = Math.random() * sum;
+      for (let j = 0; j < n; j++) { if (probs[j] > 0) { r -= probs[j]; if (r <= 0) { next = j; break; } } }
+    }
+    if (next < 0) next = lastOk;
+    tour[s] = next; visited[next] = 1; len += dist[row + next]; cur = next;
+  }
+  return len + dist[cur * n + start];
+}
+
+function iterate() {
+  const n = T.n;
+  if (n < 3) return;
+  const m = TP.ants, tau = T.tau, eta = T.eta, choice = T.choice, a = TP.alpha, b = TP.beta;
+  for (let k = 0; k < n * n; k++) choice[k] = eta[k] === 0 ? 0 : Math.pow(tau[k], a) * Math.pow(eta[k], b);
+  if (!T.tours || T.tours.length < m * n) T.tours = new Int32Array(m * n);
+  if (!T.lens || T.lens.length < m) T.lens = new Float64Array(m);
+  let ib = 0, ibLen = Infinity, sum = 0;
+  for (let k = 0; k < m; k++) {
+    const len = buildTour((Math.random() * n) | 0, T.tours.subarray(k * n, k * n + n));
+    T.lens[k] = len; sum += len;
+    if (len < ibLen) { ibLen = len; ib = k; }
+  }
+  T.iterBest = T.tours.slice(ib * n, ib * n + n); T.iterBestLen = ibLen;
+  if (ibLen < T.bestLen - 1e-9) { T.bestLen = ibLen; T.best = T.iterBest.slice(); T.lastImprove = T.iter; }
+
+  const keep = 1 - TP.rho;
+  for (let k = 0; k < n * n; k++) tau[k] *= keep;
+  const deposit = (tour, amt) => {
+    for (let s = 0; s < n; s++) {
+      const i = tour[s], j = tour[(s + 1) % n];
+      tau[i * n + j] += amt; tau[j * n + i] += amt;
+    }
+  };
+  if (TP.variant === 'as' || TP.variant === 'eas') {
+    for (let k = 0; k < m; k++) deposit(T.tours.subarray(k * n, k * n + n), 1 / T.lens[k]);
+    if (TP.variant === 'eas') deposit(T.best, n / T.bestLen);
+  } else {
+    const useGlobal = T.iter % 10 === 0;
+    deposit(useGlobal ? T.best : T.iterBest, 1 / (useGlobal ? T.bestLen : ibLen));
+    const tmax = 1 / (TP.rho * T.bestLen), tmin = tmax / (2 * n);
+    for (let k = 0; k < n * n; k++) tau[k] = tau[k] > tmax ? tmax : tau[k] < tmin ? tmin : tau[k];
+    if (T.iter - T.lastImprove > 300 && T.iter - T.lastRestart > 300) { tau.fill(tmax); T.lastRestart = T.iter; }
+  }
+  T.iter++;
+  T.hist.push([T.bestLen, sum / m]);
+  if (T.hist.length > 20000) T.hist.splice(0, T.hist.length - 20000);
+}
+
+function updateTSP(dt) {
+  if (!T.running || T.n < 3) return;
+  if (TP.ips >= 60) {
+    const t0 = performance.now();
+    do iterate(); while (performance.now() - t0 < 10);
+  } else {
+    T.acc += dt * TP.ips;
+    let k = 0;
+    while (T.acc >= 1 && k < 6) { iterate(); T.acc -= 1; k++; }
+    if (T.acc > 3) T.acc = 0;
+  }
+}
+
+function tspView() {
+  const s = stage();
+  const sc = Math.min(s.w / T.world.w, s.h / T.world.h);
+  return { sc, ox: s.x + (s.w - T.world.w * sc) / 2, oy: s.y + (s.h - T.world.h * sc) / 2 };
+}
+
+const PH_LEVELS = 12;
+function renderTSP(dt) {
+  ctx.drawImage(bg, 0, 0, W, H);
+  const v = tspView(), { sc, ox, oy } = v;
+  // map grid
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,222,190,0.09)';
+  const step = 50;
+  for (let gx = 0; gx <= T.world.w; gx += step) for (let gy = 0; gy <= T.world.h; gy += step) ctx.fillRect(ox + gx * sc - 0.5, oy + gy * sc - 0.5, 1, 1);
+  ctx.restore();
+  drawStageFrame(`KARTE  ·  ${T.n} STÄDTE  ·  ${fmt(T.world.w)}×${fmt(T.world.h)} EINHEITEN`);
+
+  const n = T.n;
+  const px = new Float32Array(n), py = new Float32Array(n);
+  for (let i = 0; i < n; i++) { px[i] = ox + T.cities[i].x * sc; py[i] = oy + T.cities[i].y * sc; }
+
+  if (TP.showPh && T.tau && n >= 3) {
+    const tau = T.tau;
+    let tmax = 0;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (tau[i * n + j] > tmax) tmax = tau[i * n + j];
+    if (tmax > 0) {
+      const buckets = Array.from({ length: PH_LEVELS }, () => []);
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+        const t = tau[i * n + j] / tmax;
+        if (t < 0.04) continue;
+        buckets[Math.min(PH_LEVELS - 1, (t * PH_LEVELS) | 0)].push(i, j);
+      }
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+      for (let b = 0; b < PH_LEVELS; b++) {
+        const e = buckets[b];
+        if (!e.length) continue;
+        const q = b / (PH_LEVELS - 1);
+        ctx.strokeStyle = `rgba(255,177,61,${(0.035 + 0.62 * Math.pow(q, 1.6)).toFixed(3)})`;
+        ctx.lineWidth = 0.6 + 3.4 * Math.pow(q, 1.4);
+        ctx.beginPath();
+        for (let k = 0; k < e.length; k += 2) { ctx.moveTo(px[e[k]], py[e[k]]); ctx.lineTo(px[e[k + 1]], py[e[k + 1]]); }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  const tracePath = (tour) => {
+    ctx.beginPath();
+    ctx.moveTo(px[tour[0]], py[tour[0]]);
+    for (let s = 1; s < n; s++) ctx.lineTo(px[tour[s]], py[tour[s]]);
+    ctx.closePath();
+  };
+  if (T.iterBest && T.iterBestLen > T.bestLen + 1e-6) {
+    ctx.save();
+    ctx.setLineDash([3, 5]); ctx.strokeStyle = 'rgba(133,149,255,0.45)'; ctx.lineWidth = 1;
+    tracePath(T.iterBest); ctx.stroke();
+    ctx.restore();
+  }
+  if (TP.showBest && T.best) {
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.globalCompositeOperation = 'lighter';
+    tracePath(T.best);
+    ctx.strokeStyle = 'rgba(255,226,160,0.08)'; ctx.lineWidth = 9; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,226,160,0.18)'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = '#fff1d8'; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.restore();
+  }
+
+  // ants walking along the best tour
+  if (TP.showAnts && T.best) {
+    const cum = new Float32Array(n + 1);
+    for (let s = 0; s < n; s++) {
+      const a = T.best[s], b = T.best[(s + 1) % n];
+      cum[s + 1] = cum[s] + Math.hypot(px[b] - px[a], py[b] - py[a]);
+    }
+    const total = cum[n];
+    if (!reduceMotion) T.phase = (T.phase + dt * 70) % total;
+    const count = clamp(Math.round(total / 90), 6, 40);
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let k = 0; k < count; k++) {
+      const d = (T.phase + k * total / count) % total;
+      let lo = 0, hi = n;
+      while (lo < hi - 1) { const mid = (lo + hi) >> 1; if (cum[mid] <= d) lo = mid; else hi = mid; }
+      const a = T.best[lo], b = T.best[(lo + 1) % n];
+      const segLen = cum[lo + 1] - cum[lo] || 1, f = (d - cum[lo]) / segLen;
+      const x = px[a] + (px[b] - px[a]) * f, y = py[a] + (py[b] - py[a]) * f;
+      const ux = (px[b] - px[a]) / segLen, uy = (py[b] - py[a]) / segLen;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(255,177,61,0.25)';
+      ctx.beginPath(); ctx.arc(x, y, 6, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = '#f4e8d6'; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.moveTo(x - ux * 3, y - uy * 3); ctx.lineTo(x + ux * 3, y + uy * 3); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // cities
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = 'rgba(255,177,61,0.16)';
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) { ctx.moveTo(px[i] + 7, py[i]); ctx.arc(px[i], py[i], 7, 0, TAU); }
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#f4e8d6';
+  ctx.strokeStyle = 'rgba(17,12,9,0.9)'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) { ctx.moveTo(px[i] + 3.3, py[i]); ctx.arc(px[i], py[i], 3.3, 0, TAU); }
+  ctx.fill(); ctx.stroke();
+  if (pointer.inside && !isMobile()) {
+    ctx.strokeStyle = 'rgba(255,177,61,0.5)'; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.arc(pointer.x, pointer.y, 7, 0, TAU); ctx.stroke();
+  }
+  ctx.restore();
+
+  if (n < 3) {
+    const s = stage();
+    ctx.save();
+    ctx.font = '600 22px "Bricolage Grotesque", system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(241,230,214,0.85)'; ctx.textAlign = 'center';
+    ctx.fillText('Setze mindestens drei Städte', s.x + s.w / 2, s.y + s.h / 2 - 6);
+    ctx.font = '400 12px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(168,146,124,0.9)';
+    ctx.fillText('Klick auf die Karte', s.x + s.w / 2, s.y + s.h / 2 + 18);
+    ctx.restore();
+  }
+}
+
+function tspPointer(e) {
+  const { sc, ox, oy } = tspView();
+  const wx = (pointer.x - ox) / sc, wy = (pointer.y - oy) / sc;
+  if (e.shiftKey || e.button === 2) {
+    let bi = -1, bd = (14 / sc) ** 2;
+    T.cities.forEach((c, i) => { const d = (c.x - wx) ** 2 + (c.y - wy) ** 2; if (d < bd) { bd = d; bi = i; } });
+    if (bi >= 0) { T.cities.splice(bi, 1); T.optimum = null; setupACO(); }
+    return;
+  }
+  if (wx < 0 || wy < 0 || wx > T.world.w || wy > T.world.h) return;
+  if (T.cities.length >= 250) return;
+  T.cities.push({ x: wx, y: wy });
+  T.optimum = null;
+  setupACO();
+}
+
+/* ---------------- charts ---------------- */
+function drawChart(cvs, o) {
+  const r = cvs.getBoundingClientRect();
+  if (!r.width) return;
+  const w = Math.round(r.width * DPR), h = Math.round(r.height * DPR);
+  if (cvs.width !== w || cvs.height !== h) { cvs.width = w; cvs.height = h; }
+  const c = cvs.getContext('2d');
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const cw = r.width, ch = r.height, pt = 6, pb = 16;
+  c.clearRect(0, 0, cw, ch);
+  const lo = o.min, hi = o.max > o.min ? o.max : o.min + 1;
+  const Y = (v) => pt + (1 - (clamp(v, lo, hi) - lo) / (hi - lo)) * (ch - pt - pb);
+  c.strokeStyle = 'rgba(255,222,190,0.07)'; c.lineWidth = 1;
+  for (let k = 0; k <= 3; k++) { const y = Math.round(pt + k * (ch - pt - pb) / 3) + 0.5; c.beginPath(); c.moveTo(0, y); c.lineTo(cw, y); c.stroke(); }
+  c.font = '9.5px "IBM Plex Mono", ui-monospace, monospace';
+  c.fillStyle = 'rgba(168,146,124,0.85)';
+  c.textBaseline = 'top'; c.textAlign = 'left';
+  c.fillText(o.xLabel || '', 0, ch - 12);
+  c.textAlign = 'right';
+  c.fillText(o.yLabel || '', cw, ch - 12);
+  for (const ref of o.refs || []) {
+    const y = Math.round(Y(ref.value)) + 0.5;
+    c.save(); c.setLineDash(ref.dash || [3, 3]); c.strokeStyle = ref.color; c.globalAlpha = 0.8;
+    c.beginPath(); c.moveTo(0, y); c.lineTo(cw, y); c.stroke(); c.restore();
+  }
+  for (const s of o.sets) {
+    const d = s.data, len = d.length;
+    if (len < 2) continue;
+    const X = (i) => i / (len - 1) * cw;
+    c.beginPath();
+    for (let i = 0; i < len; i++) { const x = X(i), y = Y(d[i]); if (i) c.lineTo(x, y); else c.moveTo(x, y); }
+    if (s.fill) {
+      c.save();
+      c.lineTo(cw, ch - pb); c.lineTo(0, ch - pb); c.closePath();
+      const g = c.createLinearGradient(0, pt, 0, ch - pb);
+      g.addColorStop(0, s.fill); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.fill(); c.restore();
+      c.beginPath();
+      for (let i = 0; i < len; i++) { const x = X(i), y = Y(d[i]); if (i) c.lineTo(x, y); else c.moveTo(x, y); }
+    }
+    c.strokeStyle = s.color; c.lineWidth = s.width || 1.4; c.lineJoin = 'round'; c.stroke();
+    if (s.dot) {
+      const x = X(len - 1), y = Y(d[len - 1]);
+      c.fillStyle = s.color; c.beginPath(); c.arc(x - 2, y, 2.6, 0, TAU); c.fill();
+    }
+  }
+}
+
+function drawColonyChart() {
+  const data = C.rate.length > 1 ? C.rate : [0, 0];
+  const max = Math.max(5, ...data) * 1.15;
+  drawChart($('#colChart'), {
+    min: 0, max,
+    sets: [{ data, color: '#ffb13d', fill: 'rgba(255,177,61,0.28)', width: 1.5, dot: true }],
+    xLabel: `${fmt(C.steps)} Schritte`, yLabel: `max ${fmt(Math.max(...data))}`,
+  });
+}
+
+function drawTspChart() {
+  const hist = T.hist;
+  const stride = Math.max(1, Math.ceil(hist.length / 240));
+  const best = [], mean = [];
+  for (let i = 0; i < hist.length; i += stride) { best.push(hist[i][0]); mean.push(hist[i][1]); }
+  if (hist.length) { best.push(hist[hist.length - 1][0]); mean.push(hist[hist.length - 1][1]); }
+  const floor = Math.min(T.bestLen, T.optimum || Infinity, T.nnLen || Infinity);
+  const min = isFinite(floor) ? floor * 0.96 : 0;
+  const max = T.nnLen ? Math.max(T.nnLen * 1.08, Math.min(T.nnLen * 1.6, Math.max(...mean, 0))) : 1;
+  const refs = [];
+  if (T.nnLen) refs.push({ value: T.nnLen, color: '#8595ff' });
+  if (T.optimum) refs.push({ value: T.optimum, color: '#ffe2a0', dash: [1, 3] });
+  drawChart($('#tspChart'), {
+    min, max, refs,
+    sets: [
+      { data: mean, color: 'rgba(168,146,124,0.8)', width: 1 },
+      { data: best, color: '#ffb13d', fill: 'rgba(255,177,61,0.22)', width: 1.6, dot: true },
+    ],
+    xLabel: `${fmt(T.iter)} Iterationen`, yLabel: isFinite(T.bestLen) ? `min ${fmt(T.bestLen)}` : '',
+  });
+}
+
+/* ---------------- stats ---------------- */
+function updateStats() {
+  if (mode === 'colony') {
+    $('#sDelivered').textContent = fmt(C.delivered);
+    $('#sFood').textContent = fmt(Math.max(0, C.foodLeft));
+    $('#sCarry').textContent = fmt(C.carrying);
+    $('#sSteps').textContent = fmt(C.steps);
+    drawColonyChart();
+  } else {
+    const has = isFinite(T.bestLen);
+    $('#tBest').textContent = has ? fmt(T.bestLen) : '–';
+    $('#tIter').textContent = fmt(T.iter);
+    if (has && T.nnLen) {
+      const d = (T.bestLen / T.nnLen - 1) * 100;
+      $('#tNN').textContent = (d <= 0 ? '−' : '+') + Math.abs(d).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %';
+    } else $('#tNN').textContent = '–';
+    if (T.optimum) {
+      $('#t4k').textContent = 'Abstand Optimum';
+      $('#t4v').textContent = has ? '+' + Math.max(0, (T.bestLen / T.optimum - 1) * 100).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %' : '–';
+    } else {
+      $('#t4k').textContent = 'Zuletzt besser';
+      $('#t4v').textContent = has ? 'It. ' + fmt(T.lastImprove) : '–';
+    }
+    drawTspChart();
+  }
+}
+
+/* ---------------- UI wiring ---------------- */
+function setRangeFill(el) { const p = (el.value - el.min) / (el.max - el.min) * 100; el.style.setProperty('--p', p + '%'); }
+function bindRange(id, value, fmtFn, onInput, onChange) {
+  const el = $('#' + id), out = document.querySelector(`output[for="${id}"]`);
+  el.value = value;
+  const show = () => { out.textContent = fmtFn(+el.value); setRangeFill(el); };
+  el.addEventListener('input', () => { show(); onInput && onInput(+el.value); });
+  if (onChange) el.addEventListener('change', () => onChange(+el.value));
+  show();
+}
+function bindSeg(id, onPick) {
+  const root = $('#' + id);
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    root.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    onPick(b.dataset.value);
+  });
+}
+function bindSwitch(id, onToggle) { $('#' + id).addEventListener('change', (e) => onToggle(e.target.checked)); }
+const dec = (d) => (v) => v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+// colony controls
+bindRange('brush', P.brush, (v) => v + ' px', (v) => P.brush = v);
+bindRange('antCount', P.ants, fmt, (v) => { P.ants = v; setAntCount(v); });
+bindRange('antSpeed', P.speed, (v) => dec(1)(v) + ' px', (v) => P.speed = v);
+bindRange('simSpeed', P.stepsPerFrame, (v) => v + '×', (v) => P.stepsPerFrame = v);
+bindRange('sensAngle', Math.round(P.sensorAngle * 180 / Math.PI), (v) => v + '°', (v) => P.sensorAngle = v * Math.PI / 180);
+bindRange('sensDist', P.sensorDist, (v) => v + ' px', (v) => P.sensorDist = v);
+bindRange('wander', P.wander, dec(2), (v) => P.wander = v);
+bindRange('evap', P.evap, (v) => dec(2)(v * 100) + ' %', (v) => P.evap = v);
+bindRange('diffusion', P.diffusion, dec(2), (v) => P.diffusion = v);
+bindSwitch('showHome', (v) => P.showHome = v);
+bindSwitch('showFood', (v) => P.showFood = v);
+bindSwitch('showAnts', (v) => P.showAnts = v);
+bindSeg('colTool', (v) => { P.tool = v; updateHud(); });
+bindSeg('colPreset', (v) => { C.preset = v; $('#presetNote').textContent = PRESET_NOTES[v]; resetColony(); });
+$('#presetNote').textContent = PRESET_NOTES[C.preset];
+const colPlay = $('#colPlay');
+function syncColPlay() { colPlay.textContent = C.running ? 'Pause' : (C.steps ? 'Weiter' : 'Start'); }
+colPlay.addEventListener('click', () => { C.running = !C.running; syncColPlay(); });
+$('#colReset').addEventListener('click', () => { resetColony(); syncColPlay(); });
+
+// tsp controls
+bindRange('cityCount', TP.n, (v) => v, (v) => TP.n = v, () => genCities());
+bindRange('tspAnts', TP.ants, (v) => v, (v) => TP.ants = v);
+bindRange('alpha', TP.alpha, dec(1), (v) => TP.alpha = v);
+bindRange('beta', TP.beta, dec(1), (v) => TP.beta = v);
+bindRange('rho', TP.rho, dec(2), (v) => TP.rho = v);
+bindRange('ips', TP.ips, (v) => v >= 60 ? 'max' : v, (v) => TP.ips = v);
+bindSwitch('showPh', (v) => TP.showPh = v);
+bindSwitch('showBest', (v) => TP.showBest = v);
+bindSwitch('showTspAnts', (v) => TP.showAnts = v);
+bindSeg('tspLayout', (v) => { TP.layout = v; genCities(); });
+bindSeg('tspVariant', (v) => { TP.variant = v; $('#variantNote').innerHTML = VARIANT_NOTES[v]; setupACO(); });
+$('#variantNote').innerHTML = VARIANT_NOTES[TP.variant];
+const tspPlay = $('#tspPlay');
+function syncTspPlay() { tspPlay.textContent = T.running ? 'Pause' : (T.iter ? 'Weiter' : 'Start'); }
+tspPlay.addEventListener('click', () => { T.running = !T.running; syncTspPlay(); });
+$('#tspStep').addEventListener('click', () => { T.running = false; iterate(); syncTspPlay(); updateStats(); });
+$('#tspReset').addEventListener('click', () => { setupACO(); syncTspPlay(); updateStats(); });
+$('#tspNew').addEventListener('click', () => { genCities(); updateStats(); });
+
+// tabs
+document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
+  mode = b.dataset.tab;
+  document.querySelectorAll('.tabs button').forEach((x) => x.setAttribute('aria-selected', x === b ? 'true' : 'false'));
+  document.querySelectorAll('[data-mode]').forEach((s) => s.hidden = s.dataset.mode !== mode);
+  updateHud(); updateStats();
+}));
+
+// mobile sheet
+const sheetToggle = $('#sheetToggle');
+sheetToggle.addEventListener('click', () => {
+  const open = panel.classList.toggle('open');
+  sheetToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  sheetToggle.textContent = open ? '▾' : '▴';
+  sheetToggle.setAttribute('aria-label', open ? 'Steuerung schließen' : 'Steuerung öffnen');
+  setTimeout(updateStats, 380);
+});
+
+function updateHud() {
+  const legend = $('#legend'), hint = $('#hint');
+  const sw = (c) => `<span class="dot" style="background:${c};box-shadow:0 0 8px ${c}"></span>`;
+  if (mode === 'colony') {
+    legend.innerHTML = `<span>${sw('#8595ff')}Heimweg</span><span>${sw('#ffb13d')}Futterspur</span><span>${sw('#ffe2a0')}Futter</span>`;
+    const verb = { food: 'Futter verteilen', wall: 'Wände ziehen', erase: 'radieren', nest: 'Nest versetzen' }[P.tool];
+    hint.innerHTML = `Ziehen: ${verb} &nbsp;·&nbsp; <kbd>Leertaste</kbd> Pause &nbsp;·&nbsp; <kbd>R</kbd> Neustart`;
+  } else {
+    legend.innerHTML = `<span>${sw('#ffb13d')}Pheromon</span><span>${sw('#fff1d8')}Beste Tour</span><span>${sw('#8595ff')}Beste der Iteration</span>`;
+    hint.innerHTML = `Klick: Stadt setzen &nbsp;·&nbsp; <kbd>Shift</kbd>+Klick: entfernen &nbsp;·&nbsp; <kbd>Leertaste</kbd> Pause`;
+  }
+}
+
+/* ---------------- pointer & keyboard ---------------- */
+const pointer = { x: 0, y: 0, lx: 0, ly: 0, down: false, inside: false };
+function readPointer(e) { pointer.x = e.clientX; pointer.y = e.clientY; pointer.inside = true; }
+function paintStroke() {
+  const dx = pointer.x - pointer.lx, dy = pointer.y - pointer.ly;
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / Math.max(2, P.brush / 3)));
+  for (let k = 1; k <= steps; k++) paintAt(pointer.lx + dx * k / steps, pointer.ly + dy * k / steps);
+  pointer.lx = pointer.x; pointer.ly = pointer.y;
+}
+cv.addEventListener('contextmenu', (e) => e.preventDefault());
+cv.addEventListener('pointerdown', (e) => {
+  readPointer(e);
+  if (panel.classList.contains('open') && isMobile()) { sheetToggle.click(); return; }
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+  pointer.down = true; pointer.lx = pointer.x; pointer.ly = pointer.y;
+  if (mode === 'colony') paintAt(pointer.x, pointer.y);
+  else { tspPointer(e); updateStats(); }
+});
+cv.addEventListener('pointermove', (e) => { readPointer(e); if (pointer.down && mode === 'colony') paintStroke(); });
+const endPointer = () => { pointer.down = false; };
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+cv.addEventListener('pointerleave', () => { pointer.inside = false; });
+
+addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (t && t !== document.body && t !== cv) return;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (mode === 'colony') { C.running = !C.running; syncColPlay(); } else { T.running = !T.running; syncTspPlay(); }
+  } else if (e.key === 'r' || e.key === 'R') {
+    if (mode === 'colony') { resetColony(); syncColPlay(); } else { setupACO(); syncTspPlay(); }
+  }
+});
+
+/* ---------------- sizing & loop ---------------- */
+let lastW = 0, lastH = 0, resizeTimer = 0;
+function applySize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  buildBackground();
+}
+function onResize() {
+  applySize();
+  const big = Math.abs(W - lastW) > 40 || Math.abs(H - lastH) > 160;
+  if (big) {
+    lastW = W; lastH = H;
+    initColonyGrid(); resetColony();
+  } else {
+    wallLayer.width = W * DPR; wallLayer.height = H * DPR; C.wallDirty = true;
+  }
+}
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(onResize, 180); });
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now; frameNo++;
+  if (!reduceMotion) clock += dt;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  if (mode === 'colony') {
+    if (C.running) for (let s = 0; s < P.stepsPerFrame; s++) stepColony();
+    renderColony();
+  } else {
+    updateTSP(dt);
+    renderTSP(dt);
+  }
+  if (frameNo % 8 === 0) updateStats();
+  requestAnimationFrame(frame);
+}
+
+applySize();
+lastW = W; lastH = H;
+initColonyGrid();
+resetColony();
+// warm up so the first frame already shows trails
+if (!reduceMotion) for (let i = 0; i < 260; i++) stepColony();
+genCities();
+syncColPlay(); syncTspPlay();
+updateHud();
+updateStats();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
