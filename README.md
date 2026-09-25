@@ -32,6 +32,9 @@ Dazu HDR-Rendering mit Bloom, filmischem Tonemapping, Vignette und Filmkorn.
 - **Neigung & Bewegung** – Neigen verschiebt in der Animation die Perspektive (Tiefeneffekt) und dreht im Kamera-Modus
   das Glasobjekt, als hieltest du es vor die Linse. Schütteln oder Ruckeln bringt das Wasser zum Schwappen und
   erzeugt Wellen. „Neu ausrichten“ macht die aktuelle Haltung zur Mitte.
+- **Umschauen mit Gyro** (Animation) – das Handy wird zum Fenster in die Szene: Umdrehen dreht den Blick, Neigen schaut
+  nach oben oder unten, Pinch zoomt, seitliches Ziehen korrigiert die Richtung. Mit echter Sonne und Kompass ist die
+  Szene nach Norden ausgerichtet, die Sonne steht also dort, wo sie wirklich ist.
 - **Echte Sonne** – aus Standort und aktueller Uhrzeit wird der echte Sonnenstand berechnet (Höhe und Himmelsrichtung).
   Mit Kompass steht die Sonne in der Szene genau dort, wo sie draußen ist, gemessen an der Richtung, in die das Handy zeigt.
 

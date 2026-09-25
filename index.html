@@ -1349,7 +1349,7 @@ const S = {
   shape: 1, floor: 0, spin: !reduced,
   wave: 2, waveAmp: 1, waveSpeed: 1, depth: 1.4,
   waterEnv: 0,
-  hour: 19.4, timeRun: false, beam: false, motion: false, realSun: false, tiltGain: 1, clouds: 0.35, exposure: 0, bloom: 0.7,
+  hour: 19.4, timeRun: false, beam: false, motion: false, realSun: false, tiltGain: 1, look: false, clouds: 0.35, exposure: 0, bloom: 0.7,
   mat: 2, ior: 1.62, disp: 0.017, tint: 0,
   camObj: 0, struct: 0, strength: 1, scale: 1, frost: 0.25, bgBlur: 0, camGrade: false,
   quality: 1, grain: 0.35
@@ -1418,7 +1418,7 @@ let spinA = 0.6, time = 0, lastT = performance.now(), seed = 3.1;
 let ripples = [];
 let camPt = [0.5, 0.52];
 let dynScale = 1;
-const sens = { beta: 0, gamma: 0, ref: null, heading: null, hasOri: false, sx: 0, sy: 0, ax: 0, az: 0, lastShake: 0 };
+const sens = { alpha: 0, beta: 0, gamma: 0, ref: null, heading: null, hasOri: false, sx: 0, sy: 0, ax: 0, az: 0, lastShake: 0 };
 const slosh = { a: [0, 0], v: [0, 0], ax: new Float32Array([1, 0, 0, 1]) };
 let geo = null;
 
@@ -1465,7 +1465,7 @@ function computeLight() {
     const sp = solarPosition(new Date(), geo.lat, geo.lon);
     e = sp.el; am = sp.am; realAz = sp.az;
     // with a compass, tie the scene to real directions: the view direction is where the phone points
-    if (S.motion && sens.heading !== null) realAz = -effYaw(curCam()) + (realAz - sens.heading * deg);
+    if (S.motion && sens.heading !== null && !lookActive()) realAz = -effYaw(curCam()) + (realAz - sens.heading * deg);
   }
   let i = 0;
   while (i < KF.length - 2 && e > KF[i + 1].e) i++;
@@ -1589,7 +1589,7 @@ function setCommon(p) {
   u1f(p, 'uMount', waterScene && S.waterEnv === 2 ? 1 : 0);
   u1f(p, 'uDepth', S.depth);
   if (waterScene) {
-    const cb0 = camBasis([0, 0, 0], cam), fw0 = norm3([cb0.f[0], 0, cb0.f[2]]);
+    const cb0 = orbitBasis([0, 0, 0], cam), fw0 = norm3([cb0.f[0], 0, cb0.f[2]]);
     gl.uniform4f(U(p, 'uShore'), cb0.pos[0], cb0.pos[2], fw0[0], fw0[2]);
   }
   gl.uniform4fv(U(p, 'uSloshAx'), slosh.ax);
@@ -1607,13 +1607,52 @@ function setSpec(p, n) {
   u1f(p, 'uIOR', S.ior);
   u1f(p, 'uDisp', S.disp);
 }
-function tiltGain(c) { return S.motion ? (c === camC ? 1.0 : 0.35) * S.tiltGain : 0; }
+function lookActive() { return S.look && S.motion && sens.hasOri && S.mode === 'anim'; }
+function tiltGain(c) { return S.motion && !(c === cam && lookActive()) ? (c === camC ? 1.0 : 0.35) * S.tiltGain : 0; }
 function effYaw(c) { return c.yaw - sens.sx * deg * tiltGain(c); }
 function effPitch(c) {
   const p = c.pitch + sens.sy * deg * tiltGain(c);
   return c === camC ? clamp(p, -85 * deg, 85 * deg) : clamp(p, 2 * deg, 80 * deg);
 }
-function camBasis(target, cam = curCam()) {
+// Look-around: the phone is a window into the scene. Device orientation (W3C: R = Rz(alpha)·Rx(beta)·Ry(gamma),
+// earth frame east/north/up) is mapped to the scene frame (x = east, y = up, -z = north).
+function deviceFrame() {
+  let Rm = mul3(mul3(rotZ(sens.alpha * deg), rotX(sens.beta * deg)), rotY(sens.gamma * deg));
+  const sa = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+  Rm = mul3(Rm, rotZ(-sa * deg));
+  const col = i => [Rm[i], Rm[3 + i], Rm[6 + i]];
+  const toScene = v => [v[0], v[2], -v[1]];
+  const z = toScene(col(2));
+  return { r: toScene(col(0)), u: toScene(col(1)), f: [-z[0], -z[1], -z[2]] };
+}
+const look = { off: 0, needCal: true, f: [0, 0, -1], u: [0, 1, 0] };
+const azOf = v => Math.atan2(v[0], -v[2]);
+function rotYv(v, t) { const c = Math.cos(t), s = Math.sin(t); return [c * v[0] + s * v[2], v[1], -s * v[0] + c * v[2]]; }
+function updateLook(dt) {
+  if (!lookActive()) { look.needCal = true; return; }
+  const d = deviceFrame();
+  if (look.needCal) {
+    const want = S.realSun && sens.heading !== null ? sens.heading * deg : azOf(orbitBasis([0, 0, 0], cam).f);
+    look.off = azOf(d.f) - want;
+    look.needCal = false;
+    look.f = rotYv(d.f, look.off); look.u = rotYv(d.u, look.off);
+  }
+  const f = rotYv(d.f, look.off), u = rotYv(d.u, look.off);
+  const k = Math.min(1, dt * 14);
+  look.f = norm3(lerp3(look.f, f, k));
+  look.u = norm3(lerp3(look.u, u, k));
+}
+function camBasis(target, c = curCam()) {
+  if (c === cam && lookActive()) {
+    const pos = orbitBasis(target, cam).pos;
+    const f = look.f;
+    const r = norm3(cross(f, look.u));
+    const u = cross(r, f);
+    return { pos, f, r, u, rot: new Float32Array([r[0], r[1], r[2], u[0], u[1], u[2], -f[0], -f[1], -f[2]]) };
+  }
+  return orbitBasis(target, c);
+}
+function orbitBasis(target, cam) {
   const yaw = effYaw(cam), pitch = effPitch(cam);
   const cp = Math.cos(pitch);
   const pos = [target[0] + Math.sin(yaw) * cp * cam.dist, target[1] + Math.sin(pitch) * cam.dist, target[2] + Math.cos(yaw) * cp * cam.dist];
@@ -1731,8 +1770,11 @@ function renderWater() {
   ensureCaustic();
   const target = [0, 0, 0];
   const cb = camBasis(target);
-  const fw = norm3([cb.f[0], 0, cb.f[2]]);
-  const reg = { C: [target[0] + fw[0] * 4, target[2] + fw[2] * 4], U: [fw[0], fw[2]], H: [10, 8] };
+  let fw = [cb.f[0], 0, cb.f[2]];
+  if (Math.hypot(fw[0], fw[2]) < 0.15) fw = orbitBasis(target, cam).f.slice();
+  fw = norm3([fw[0], 0, fw[2]]);
+  const hd = cam.dist * Math.cos(cam.pitch) + 4;
+  const reg = { C: [cb.pos[0] + fw[0] * hd, cb.pos[2] + fw[2] * hd], U: [fw[0], fw[2]], H: [10, 8] };
   const rs = jsRefract([-Lt.dir[0], -Lt.dir[1], -Lt.dir[2]], [0, 1, 0], 1 / S.ior);
   const k = rs[1] < -0.05 ? S.depth / -rs[1] : 0;
   const surfC = [reg.C[0] - rs[0] * k, reg.C[1] - rs[2] * k];
@@ -2009,6 +2051,7 @@ function frame(now) {
   }
   ripples = ripples.filter(r => time - r.t0 < 9);
   updateSensors(dt);
+  updateLook(dt);
   ema = lerp(ema, dt * 1000, 0.05);
   if (ema > 48 && dynScale > 0.62 && time > 2.5 && !window.__noAdapt) { slowFor += dt; if (slowFor > 1.5) { dynScale *= 0.85; slowFor = 0; } }
   else slowFor = 0;
@@ -2075,12 +2118,13 @@ const PANES = [
   ] },
   { id: 'sensors', label: 'Sensoren', items: [
     { type: 'toggle', key: 'motion', label: 'Neigung & Bewegung', onChange: v => { if (v) enableMotion(); } },
+    { type: 'toggle', key: 'look', label: 'Umschauen mit Gyro', show: () => S.mode === 'anim', onChange: v => { look.needCal = true; if (v && !S.motion) enableMotion(); if (!v) cam.fov = 42 * deg; } },
     { type: 'toggle', key: 'realSun', label: 'Echte Sonne (Standort & Uhrzeit)', onChange: v => { if (v) enableRealSun(); } },
-    { type: 'range', key: 'tiltGain', label: 'Stärke der Neigung', min: 0, max: 2, step: 0.01, fmt: v => '×' + v.toFixed(2), show: () => S.motion },
-    { type: 'buttons', show: () => S.motion, buttons: [['Neu ausrichten', () => { sens.ref = null; toast('Aktuelle Haltung ist jetzt die Mitte.'); }]] },
+    { type: 'range', key: 'tiltGain', label: 'Stärke der Neigung', min: 0, max: 2, step: 0.01, fmt: v => '×' + v.toFixed(2), show: () => S.motion && !(S.look && S.mode === 'anim') },
+    { type: 'buttons', show: () => S.motion, buttons: [['Neu ausrichten', () => { sens.ref = null; look.needCal = true; toast(S.look && S.mode === 'anim' ? 'Die Blickrichtung zeigt wieder zur Szene.' : 'Aktuelle Haltung ist jetzt die Mitte.'); }]] },
     { type: 'note', live: true, text: sensorText },
     { type: 'note', text: () => S.mode === 'anim'
-      ? 'Neigen verschiebt die Perspektive, Schütteln oder Ruckeln bringt das Wasser zum Schwappen. Mit Kompass und echter Sonne steht die Sonne in der Szene dort, wo sie draußen wirklich ist, gemessen an der Richtung, in die dein Handy zeigt.'
+      ? S.look ? 'Umschauen: Das Handy ist dein Fenster in die Szene. Dreh dich mit ihm um und neige es, um nach oben oder unten zu sehen. Pinch zoomt, seitliches Ziehen korrigiert die Richtung. Schütteln bringt das Wasser zum Schwappen.' : 'Neigen verschiebt die Perspektive, Schütteln oder Ruckeln bringt das Wasser zum Schwappen. Mit Kompass und echter Sonne steht die Sonne in der Szene dort, wo sie draußen wirklich ist, gemessen an der Richtung, in die dein Handy zeigt.'
       : 'Neigen dreht das Glasobjekt, als würdest du es vor die Kamera halten. Bei der Glasscheibe „Wasser“ erzeugt Schütteln Wellen.' }
   ] },
   { id: 'out', label: 'Bild', items: [
@@ -2290,7 +2334,7 @@ function screenTilt() {
 }
 function onOrientation(e) {
   if (e.beta === null && e.gamma === null) return;
-  sens.beta = e.beta || 0; sens.gamma = e.gamma || 0; sens.hasOri = true;
+  sens.alpha = e.alpha || 0; sens.beta = e.beta || 0; sens.gamma = e.gamma || 0; sens.hasOri = true;
   if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) sens.heading = e.webkitCompassHeading;
   else if (e.absolute && e.alpha !== null) sens.heading = (360 - e.alpha) % 360;
 }
@@ -2410,12 +2454,12 @@ function shakeRipple(amp) {
 
 /* ---------- pointer interaction ---------- */
 const ptrs = new Map();
-let drag = null, pinch0 = 0, dist0 = 0;
+let drag = null, pinch0 = 0, dist0 = 0, fov0 = 0;
 canvas.addEventListener('pointerdown', e => {
   canvas.setPointerCapture(e.pointerId);
   ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (ptrs.size === 1) drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false };
-  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); dist0 = curCam().dist; if (drag) drag.moved = true; }
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); dist0 = curCam().dist; fov0 = cam.fov; if (drag) drag.moved = true; }
 });
 canvas.addEventListener('pointermove', e => {
   if (!ptrs.has(e.pointerId)) return;
@@ -2424,7 +2468,8 @@ canvas.addEventListener('pointermove', e => {
     const [a, b] = [...ptrs.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y);
     if (pinch0 > 0) {
-      if (S.mode === 'anim') cam.dist = clamp(dist0 * pinch0 / d, 2.6, 16);
+      if (S.mode === 'anim' && lookActive()) cam.fov = clamp(fov0 * pinch0 / d, 18 * deg, 85 * deg);
+      else if (S.mode === 'anim') cam.dist = clamp(dist0 * pinch0 / d, 2.6, 16);
       else if (camObj3D()) camC.dist = clamp(dist0 * pinch0 / d, camMinDist(), 14);
     }
     return;
@@ -2434,7 +2479,9 @@ canvas.addEventListener('pointermove', e => {
   if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 7) drag.moved = true;
   drag.x = e.clientX; drag.y = e.clientY;
   if (!drag.moved) return;
-  if (S.mode === 'anim') {
+  if (S.mode === 'anim' && lookActive()) {
+    look.off += dx * 0.006 * (cam.fov / (42 * deg));
+  } else if (S.mode === 'anim') {
     cam.yaw -= dx * 0.006;
     cam.pitch = clamp(cam.pitch + dy * 0.004, 2 * deg, 80 * deg);
   } else if (camObj3D()) {
@@ -2454,7 +2501,8 @@ canvas.addEventListener('pointerup', endPtr);
 canvas.addEventListener('pointercancel', endPtr);
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
-  if (S.mode === 'anim') cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), 2.6, 16);
+  if (S.mode === 'anim' && lookActive()) cam.fov = clamp(cam.fov * Math.exp(e.deltaY * 0.0012), 18 * deg, 85 * deg);
+  else if (S.mode === 'anim') cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), 2.6, 16);
   else if (camObj3D()) camC.dist = clamp(camC.dist * Math.exp(e.deltaY * 0.0012), camMinDist(), 14);
   else S.scale = clamp(S.scale * Math.exp(-e.deltaY * 0.0012), 0.4, 2.5), syncUI();
 }, { passive: false });
