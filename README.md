@@ -7,9 +7,10 @@ Eine einzige Datei (`index.html`), keine Abhängigkeiten, läuft komplett auf de
 
 **Animation** – ein physikalisch basierter Raytracer:
 
-- Objekte: Wasser (Pool), Glaskugel, Prisma, Linse, Diamant (Brillantschliff), Glasring, Würfel auf der Spitze, gedrehte Skulptur
+- Objekte: Wasser, Glaskugel, Prisma, Linse, Diamant (Brillantschliff), Glasring, Würfel auf der Spitze, gedrehte Skulptur
+- Gewässer: **Pool** (Fliesen), **Meer** (Sandboden, der vom türkisen Flachwasser ins Tiefblau abfällt, Schaumkronen bei Wind und Sturm), **Bergsee** (Kieselgrund, Bergpanorama mit Schneegipfeln, das sich im Wasser spiegelt und abends glüht)
 - Wellen: glatt, Dünung, Wind, Regen, Sturm, Interferenz – Tippen aufs Wasser lässt Tropfen fallen
-- Untergrund: Stein, Holz, Schach, Pool-Fliesen, Sand
+- Untergrund: Stein, Holz, Schach, Pool-Fliesen, Sand, Kiesel
 - **Echte Kaustiken**: Hunderttausende Sonnenstrahlen werden pro Frame einzeln durch Glas bzw. Wasseroberfläche verfolgt und auf dem Boden gesammelt (Photon-Splatting, zeitlich akkumuliert). Dadurch entstehen Brennpunkte, Lichtnetze am Poolboden und Regenbögen hinter dem Prisma.
 - **Dispersion**: bis zu 8 Wellenlängen pro Pixel mit Brechungsindex nach Cauchy (`n_F − n_C`, Abbe-Zahl wird angezeigt)
 - Fresnel-Reflexion, Totalreflexion, Absorption nach Beer-Lambert (Tönungen: Klar, Aqua, Smaragd, Bernstein, Rosé, Kobalt)

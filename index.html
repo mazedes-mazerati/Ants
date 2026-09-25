@@ -244,6 +244,10 @@ uniform float uWaveSpeed;
 uniform vec4 uRip[8];
 uniform vec2 uSlosh;
 uniform vec4 uSloshAx;
+uniform float uDepth;
+uniform int uWaterEnv;
+uniform float uMount;
+uniform vec4 uShore;
 uniform float uSeed;
 uniform float uBeam;
 uniform float uBeamW;
@@ -272,7 +276,58 @@ vec3 skyBase(vec3 d){
   if (y < 0.0) col = mix(col, uHorizon*0.5, 1.0 - exp(y*5.0));
   return col;
 }
-vec3 fogCol(vec3 rd){ return skyBase(normalize(vec3(rd.x + 1e-5, 0.0, rd.z))); }
+// Mountain panorama for the lake: two ridge layers on the horizon, snow caps lit by the sun
+float mountH(float az){
+  float m = 0.45*sin(az*3.0 + 1.3) + 0.3*sin(az*5.0 + 0.4) + 0.2*sin(az*8.0 + 2.1)
+          + 0.12*sin(az*13.0 + 4.0) + 0.07*sin(az*21.0 + 0.7) + 0.04*sin(az*34.0 + 2.9) + 0.025*sin(az*55.0 + 1.1);
+  float peaks = pow(1.0 - abs(sin(az*6.0 + m*1.7)), 3.0);
+  return 0.03 + 0.085*(m*0.5 + 0.55) + 0.07*peaks*(m*0.5 + 0.6);
+}
+// Mountain panorama for the lake: far range with snow above a fixed snow line, forested foothills in front
+vec4 mountains(vec3 d){
+  if (uMount < 0.5 || d.y > 0.3) return vec4(0.0);
+  vec2 dir2 = normalize(d.xz + vec2(1e-5));
+  float y = max(d.y, 0.0);
+  float az = atan(dir2.y, dir2.x);
+  float h1 = mountH(az);
+  float n2 = 0.5 + 0.3*sin(az*7.0 + 2.0) + 0.15*sin(az*17.0 + 0.3) + 0.06*sin(az*41.0 + 5.0);
+  float h2 = 0.008 + 0.028*n2;
+  if (y >= h1 && y >= h2) return vec4(0.0);
+  vec3 amb = uZenith*0.9 + uHorizon*0.25;
+  float azS = atan(uSunDir.z, uSunDir.x);
+  float side = sin(azS - az) > 0.0 ? 1.0 : -1.0;
+  float sunUp = smoothstep(-0.06, 0.12, uSunDir.y);
+  if (y < h2){
+    float dh2 = 0.3*7.0*cos(az*7.0 + 2.0) + 0.15*17.0*cos(az*17.0 + 0.3);
+    float lit2 = 0.3 + 0.7*smoothstep(-2.0, 2.0, dh2*side);
+    float tex = 0.85 + 0.3*fbm(vec2(az*140.0, y*260.0));
+    vec3 forest = vec3(0.025, 0.04, 0.03)*tex*(uSunCol*0.35*lit2*sunUp + amb*0.9);
+    return vec4(mix(forest, uHorizon*0.55, 0.28), 1.0);
+  }
+  float e = 0.004;
+  float dh = (mountH(az + e) - mountH(az - e))/(2.0*e);
+  float gully = fbm(vec2(az*90.0, y*55.0 + az*20.0));
+  float lit = clamp(0.25 + 0.75*smoothstep(-0.25, 0.25, dh*side + (gully - 0.5)*0.35), 0.0, 1.0)*sunUp;
+  float line = 0.078 + 0.012*sin(az*23.0) + 0.02*(gully - 0.5);
+  float snow = smoothstep(line, line + 0.006, y);
+  vec3 rock = vec3(0.1, 0.095, 0.1)*(0.8 + 0.4*gully)*(uSunCol*0.3*lit + amb);
+  vec3 sn = vec3(0.86, 0.89, 0.96)*(uSunCol*0.36*lit + amb*0.85);
+  vec3 m = mix(rock, sn, snow);
+  float haze = mix(0.3, 0.5, smoothstep(h1, 0.0, y)*0.6);
+  return vec4(mix(m, uHorizon*0.85 + uZenith*0.2, haze), 1.0);
+}
+vec3 fogCol(vec3 rd){
+  vec3 h = normalize(vec3(rd.x + 1e-5, 0.0, rd.z));
+  vec4 m = mountains(h + vec3(0.0, 0.002, 0.0));
+  return mix(skyBase(h), m.rgb, m.a);
+}
+float floorDepth(vec2 xz){
+  if (uWaterEnv == 0) return uDepth;
+  float r = max(dot(xz - uShore.xy, uShore.zw) - 1.5, 0.0) + 0.15*length(xz - uShore.xy);
+  float k = uWaterEnv == 1 ? 0.10 : 0.16;
+  float bars = uWaterEnv == 1 ? 0.25*sin(xz.x*0.35 + sin(xz.y*0.2)*2.0) : 0.3*(vnoise(xz*0.4) - 0.5);
+  return clamp(uDepth*(1.0 + k*pow(r, 1.35)) + bars, 0.3, 45.0);
+}
 
 vec3 skyCol(vec3 d, float disk){
   vec3 col = skyBase(d);
@@ -299,7 +354,8 @@ vec3 skyCol(vec3 d, float disk){
     vec3 cc = base + uSunCol*0.26*(0.25 + 0.75*pow(s01, 3.0)) + uSunCol*0.5*pow(max(sd, 0.0), 24.0)*(1.0 - cov);
     col = mix(col, cc, cov*0.85);
   }
-  return col;
+  vec4 m = mountains(d);
+  return mix(col, m.rgb, m.a);
 }
 
 float seaOct(vec2 uv, float ch){
@@ -444,6 +500,24 @@ vec3 floorAlb(vec2 p, float dist){
     tile = mix(vec3(0.05, 0.16, 0.40), tile, smoothstep(0.17, 0.2 + w, lane));
     vec3 grout = vec3(0.6, 0.64, 0.64);
     return mix(grout, tile, mix(gr, 0.85, clamp(w*12.0, 0.0, 1.0)));
+  }
+  if (uFloor == 5){
+    vec2 q = p*5.5 + vec2(vnoise(p*2.0), vnoise(p*2.0 + 7.0))*0.6;
+    vec2 id = floor(q), f = fract(q);
+    float d1 = 8.0, d2 = 8.0; vec2 cid = vec2(0.0);
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++){
+      vec2 c = vec2(float(i), float(j));
+      vec2 o = c + 0.15 + 0.7*hash22(id + c) - f;
+      float dd = dot(o, o);
+      if (dd < d1){ d2 = d1; d1 = dd; cid = id + c; } else if (dd < d2) d2 = dd;
+    }
+    float h = hash12(cid);
+    float dome = 1.0 - smoothstep(0.0, 0.5, sqrt(d1));
+    vec3 stone = mix(vec3(0.34, 0.33, 0.31), vec3(0.62, 0.58, 0.52), h)*(0.7 + 0.45*dome);
+    if (h > 0.8) stone = vec3(0.42, 0.34, 0.28);
+    if (h < 0.12) stone = vec3(0.22, 0.24, 0.25);
+    float gap = smoothstep(0.0, 0.12 + w*3.0, sqrt(d2) - sqrt(d1));
+    return stone*(0.88 + 0.2*vnoise(p*40.0))*mix(0.25, 1.0, mix(gap, 0.8, clamp(w*10.0, 0.0, 1.0)));
   }
   float r = sin(p.x*5.0 + vnoise(p*0.7)*5.0 + vnoise(p*2.3))*0.5 + 0.5;
   float n = vnoise(p*23.0);
@@ -709,23 +783,25 @@ void main(){
 
 const FS_WATER = HEAD + COMMON + CAUSTIC + CAUSTIC_FS + FLOOR + SPEC_U + CAM_U + `
 uniform vec3 uAbsorb;
-uniform float uDepth;
 uniform float uWaveBound;
 out vec4 o;
 vec3 underwater(vec3 p, vec3 tr, float dist){
-  float tf = (-uDepth - p.y)/min(tr.y, -0.05);
+  float ty = min(tr.y, -0.05);
+  float tf = (floorDepth(p.xz) + p.y)/(-ty);
+  for (int k = 0; k < 3; k++) tf = (floorDepth((p + tr*tf).xz) + p.y)/(-ty);
   vec3 q = p + tr*tf;
+  float dq = floorDepth(q.xz);
   vec3 alb = floorAlb(q.xz, dist + tf);
   float sunY = max(uSunDir.y, 0.0);
   vec3 rs = refract(-uSunDir, vec3(0.0, 1.0, 0.0), 1.0/uIOR);
   vec3 sig = uAbsorb + 0.04;
-  vec3 flatL = vec3(sunY*0.97)*exp(-sig*uDepth/max(-rs.y, 0.2));
+  vec3 flatL = vec3(sunY*0.97)*exp(-sig*dq/max(-rs.y, 0.2));
   vec2 uv = cauUV(q.xz);
   vec2 ed = smoothstep(vec2(0.0), vec2(0.06), uv)*smoothstep(vec2(1.0), vec2(0.94), uv);
   float w = ed.x*ed.y;
   vec3 cau = w > 0.0 ? cauSample(uv) : vec3(0.0);
   cau = mix(flatL, cau, w);
-  vec3 amb = (uZenith*0.8 + uHorizon*0.12)*exp(-sig*uDepth)*0.8;
+  vec3 amb = (uZenith*0.8 + uHorizon*0.12)*exp(-sig*dq)*0.8;
   vec3 lit = alb*(uSunCol*cau + amb);
   vec3 att = exp(-sig*tf);
   vec3 Lin = uSunCol*sunY*0.5 + uZenith*0.9 + uHorizon*0.1;
@@ -781,6 +857,12 @@ void main(){
     vec3 tr = refract(rd, n, 1.0/uIOR);
     vec3 under = underwater(p, tr, t);
     col = mix(under, refl, F);
+    if (uWaterEnv == 1){
+      float crest = p.y/max(uWaveBound, 0.02);
+      float fn = vnoise(p.xz*3.0 + uTime*0.3)*0.6 + vnoise(p.xz*9.0 - uTime*0.2)*0.4;
+      float foam = smoothstep(0.35, 0.8, crest + (fn - 0.5)*0.5)*smoothstep(0.12, 0.3, uWaveBound)*(1.0 - fade);
+      col = mix(col, vec3(0.92)*(uSunCol*max(uSunDir.y, 0.0)*0.8 + uZenith*1.3 + uHorizon*0.3), foam*0.75);
+    }
     col = mix(col, fogCol(rd), 1.0 - exp(-t*uFog*0.6));
   }
   o = vec4(max(col, 0.0)*uEnc, 1.0);
@@ -788,7 +870,6 @@ void main(){
 
 const VS_PH_WATER = HEAD + COMMON + CAUSTIC + SPEC_U + `
 uniform vec3 uAbsorb;
-uniform float uDepth;
 uniform ivec2 uGrid;
 uniform float uPt;
 uniform float uEnergy;
@@ -812,7 +893,8 @@ void main(){
   gl_Position = vec4(-10.0, -10.0, 0.0, 1.0);
   vCol = vec3(0.0);
   if (r.y > -0.01) return;
-  float tf = (-uDepth - s.y)/r.y;
+  float tf = (floorDepth(s.xz) + s.y)/(-r.y);
+  for (int k = 0; k < 2; k++) tf = (floorDepth((s + r*tf).xz) + s.y)/(-r.y);
   vec3 hit = s + r*tf;
   vec2 uv = cauUV(hit.xz);
   if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return;
@@ -1266,6 +1348,7 @@ const S = {
   mode: 'anim',
   shape: 1, floor: 0, spin: !reduced,
   wave: 2, waveAmp: 1, waveSpeed: 1, depth: 1.4,
+  waterEnv: 0,
   hour: 19.4, timeRun: false, beam: false, motion: false, realSun: false, tiltGain: 1, clouds: 0.35, exposure: 0, bloom: 0.7,
   mat: 2, ior: 1.62, disp: 0.017, tint: 0,
   camObj: 0, struct: 0, strength: 1, scale: 1, frost: 0.25, bgBlur: 0, camGrade: false,
@@ -1285,7 +1368,9 @@ const TINTS = [
   { name: 'Smaragd', a: [0.85, 0.11, 0.55] },
   { name: 'Bernstein', a: [0.06, 0.3, 1.1] },
   { name: 'Rosé', a: [0.07, 0.55, 0.28] },
-  { name: 'Kobalt', a: [1.1, 0.7, 0.06] }
+  { name: 'Kobalt', a: [1.1, 0.7, 0.06] },
+  { name: 'Ozean', a: [0.5, 0.085, 0.035] },
+  { name: 'Bergsee', a: [0.34, 0.085, 0.13] }
 ];
 const QUAL = [
   { name: 'Schnell', scale: 0.5, S: 3, gN: 200, wN: [300, 240], cau: 512 },
@@ -1499,6 +1584,14 @@ function setCommon(p) {
   u1f(p, 'uBeamW', BEAM_W);
   u1i(p, 'uWave', S.wave);
   gl.uniform2f(U(p, 'uSlosh'), slosh.a[0], slosh.a[1]);
+  const waterScene = S.mode === 'anim' && S.shape === 0;
+  u1i(p, 'uWaterEnv', waterScene ? S.waterEnv : 0);
+  u1f(p, 'uMount', waterScene && S.waterEnv === 2 ? 1 : 0);
+  u1f(p, 'uDepth', S.depth);
+  if (waterScene) {
+    const cb0 = camBasis([0, 0, 0], cam), fw0 = norm3([cb0.f[0], 0, cb0.f[2]]);
+    gl.uniform4f(U(p, 'uShore'), cb0.pos[0], cb0.pos[2], fw0[0], fw0[2]);
+  }
   gl.uniform4fv(U(p, 'uSloshAx'), slosh.ax);
   u1f(p, 'uWaveAmp', S.waveAmp);
   u1f(p, 'uWaveSpeed', S.waveSpeed);
@@ -1942,7 +2035,8 @@ const abbe = () => S.disp > 0.0005 ? Math.round((S.ior - 1) / S.disp) : '∞';
 const PANES = [
   { id: 'scene', label: 'Szene', show: () => S.mode === 'anim', items: [
     { type: 'chips', key: 'shape', label: 'Objekt', options: [['Wasser', 0], ['Glaskugel', 1], ['Prisma', 2], ['Linse', 3], ['Diamant', 4], ['Glasring', 5], ['Würfel', 6], ['Skulptur', 7]], onChange: setShape },
-    { type: 'chips', key: 'floor', label: 'Untergrund', options: [['Stein', 0], ['Holz', 1], ['Schach', 2], ['Fliesen', 3], ['Sand', 4]] },
+    { type: 'chips', key: 'waterEnv', label: 'Gewässer', show: () => S.shape === 0, options: [['Pool', 0], ['Meer', 1], ['Bergsee', 2]], onChange: setWaterEnv },
+    { type: 'chips', key: 'floor', label: 'Untergrund', options: [['Stein', 0], ['Holz', 1], ['Schach', 2], ['Fliesen', 3], ['Sand', 4], ['Kiesel', 5]] },
     { type: 'toggle', key: 'spin', label: 'Objekt dreht sich', show: () => S.shape > 0 },
     { type: 'note', text: () => S.shape === 0 ? 'Ziehen dreht die Kamera, Pinch oder Mausrad zoomt. Tippe aufs Wasser, um Tropfen fallen zu lassen.' : 'Ziehen dreht die Kamera, Pinch oder Mausrad zoomt. Die Lichtflecken am Boden sind echte Kaustiken: Jeder Sonnenstrahl wird einzeln durch das Glas verfolgt.' }
   ] },
@@ -2096,10 +2190,20 @@ function updateMeta() {
   const what = S.mode === 'anim' ? (S.shape === 0 ? 'Wasser' : SHAPES[S.shape].name) : 'Kamera';
   $('#meta').textContent = what + ' · n ' + S.ior.toFixed(3) + ' · V ' + abbe() + ' · ' + fmtHour(S.hour);
 }
+const WATER_ENVS = [
+  { floor: 3, tint: 1, depth: 1.4, wave: 2, waveAmp: 1, pitch: 17 },
+  { floor: 4, tint: 6, depth: 1.1, wave: 1, waveAmp: 1, pitch: 11 },
+  { floor: 5, tint: 7, depth: 0.9, wave: 0, waveAmp: 1, pitch: 8 }
+];
+function setWaterEnv(v) {
+  const w = WATER_ENVS[v];
+  Object.assign(S, { floor: w.floor, tint: w.tint, depth: w.depth, wave: w.wave, waveAmp: w.waveAmp });
+  cam.pitch = w.pitch * deg;
+}
 function setShape(v) {
   const wasWater = cam.dist > 6.5;
   if (v === 0) {
-    S.floor = 3; S.tint = 1; S.ior = MATS[0].ior; S.disp = MATS[0].disp; S.mat = 0;
+    S.floor = WATER_ENVS[S.waterEnv].floor; S.tint = WATER_ENVS[S.waterEnv].tint; S.ior = MATS[0].ior; S.disp = MATS[0].disp; S.mat = 0;
     if (!wasWater) { cam.pitch = CAM_DEFAULT.water.pitch; cam.dist = CAM_DEFAULT.water.dist; }
   } else {
     const m = SHAPES[v].mat;
@@ -2390,7 +2494,7 @@ computeLight();
 if (location.hash === '#kamera') setMode('cam');
 requestAnimationFrame(t => { lastT = t; frame(t); });
 setTimeout(() => toast(coarse ? 'Ziehen zum Drehen · Pinch zum Zoomen' : 'Ziehen zum Drehen · Mausrad zum Zoomen'), 600);
-window.__refraktor = { S, cam, camC, setMode, setShape, syncUI, get time() { return time; }, };
+window.__refraktor = { S, cam, camC, setWaterEnv, setMode, setShape, syncUI, get time() { return time; }, };
 })();
 </script>
 </body>
