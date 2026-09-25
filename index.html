@@ -1,0 +1,2116 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#07080b">
+<title>Refraktor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#07080b;
+  --ink:#ece8e1;
+  --mute:#a39e96;
+  --glass:rgba(13,15,21,.60);
+  --glass-2:rgba(255,255,255,.06);
+  --line:rgba(255,255,255,.11);
+  --line-2:rgba(255,255,255,.28);
+  --sun:#f3c77b;
+  --chip-on:#f4f1ec;
+  --chip-on-ink:#101216;
+  --spec:linear-gradient(90deg,#ff5f5f,#ffae4a,#ffe66b,#72f5a0,#5cc8ff,#9a72ff);
+  --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
+  --sans:"Instrument Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overflow:hidden;
+  font:14px/1.4 var(--sans);-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit}
+canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;background:var(--bg)}
+#vid{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none}
+
+.top{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+  padding:calc(env(safe-area-inset-top,0px) + 12px) 16px 0;pointer-events:none}
+.top>*{pointer-events:auto}
+.brand{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 auto}
+.word{font-family:var(--serif);font-style:italic;font-size:31px;line-height:.9;letter-spacing:.005em;text-shadow:0 1px 20px rgba(0,0,0,.55)}
+.meta{font:500 10.5px/1.2 var(--mono);color:var(--ink);opacity:.72;letter-spacing:.05em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 8px rgba(0,0,0,.7)}
+.topr{flex:0 0 auto}
+.topr{display:flex;gap:8px;align-items:center}
+.seg{display:flex;background:var(--glass);-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);
+  border:1px solid var(--line);border-radius:999px;padding:3px}
+.seg button{border:0;background:none;color:var(--mute);font-weight:500;font-size:13px;padding:8px 14px;border-radius:999px;cursor:pointer}
+.seg button.on{background:rgba(255,255,255,.15);color:var(--ink)}
+.icon-btn{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);background:var(--glass);
+  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);cursor:pointer;padding:0}
+.icon-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+.sheet{position:fixed;z-index:4;left:0;right:0;bottom:0;margin:0 auto;max-width:780px;background:var(--glass);
+  -webkit-backdrop-filter:blur(22px) saturate(1.5);backdrop-filter:blur(22px) saturate(1.5);
+  border:1px solid var(--line);border-bottom:0;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs{display:flex;gap:2px;overflow-x:auto;padding:4px 8px 0;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{position:relative;flex:0 0 auto;background:none;border:0;color:var(--mute);font-weight:500;font-size:13.5px;padding:13px 12px 14px;cursor:pointer}
+.tabs button.on{color:var(--ink)}
+.tabs button.on::after{content:"";position:absolute;left:12px;right:12px;bottom:7px;height:2px;border-radius:2px;background:var(--spec)}
+.tabs .grip{margin-left:auto;color:var(--mute);padding:13px 10px}
+.tabs .grip svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;transition:transform .25s}
+.sheet.collapsed .tabs .grip svg{transform:rotate(180deg)}
+.panes{max-height:min(36vh,340px);overflow-y:auto;padding:4px 16px 14px;border-top:1px solid var(--line);scrollbar-width:thin}
+.sheet.collapsed .panes{display:none}
+.pane{display:flex;flex-direction:column}
+.group{display:flex;flex-direction:column;gap:9px;padding:11px 0 7px}
+.glabel{font:500 10px/1 var(--mono);text-transform:uppercase;letter-spacing:.14em;color:var(--mute)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{appearance:none;border:1px solid var(--line);background:var(--glass-2);color:var(--ink);font-weight:500;font-size:13px;line-height:1;
+  padding:9px 13px;border-radius:999px;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
+.chip:hover{border-color:var(--line-2)}
+.chip.on{background:var(--chip-on);color:var(--chip-on-ink);border-color:transparent}
+.chip small{font:500 10px var(--mono);opacity:.6;margin-left:6px;letter-spacing:.02em}
+.ctl{display:flex;flex-direction:column;gap:2px;padding:6px 0 2px}
+.ctl .row{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.ctl label{font-size:13px;color:var(--ink)}
+.val{font:500 11.5px var(--mono);font-variant-numeric:tabular-nums;color:var(--mute);white-space:nowrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:30px;background:transparent;margin:0;cursor:pointer;--track:rgba(255,255,255,.2)}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:var(--track)}
+input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:var(--track)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;margin-top:-9px;box-shadow:0 1px 8px rgba(0,0,0,.55);border:0}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.55);border:0}
+input.t-time{--track:linear-gradient(90deg,#0b1130 0%,#232a5e 7%,#c86e5a 11%,#f3be78 15%,#b7cde0 26%,#8fbfee 50%,#b9d0e4 72%,#f1b066 82%,#d0604a 86.5%,#3b3674 91%,#0b1130 100%)}
+input.t-spec{--track:linear-gradient(90deg,rgba(255,255,255,.25),#ff6060 22%,#ffc451 40%,#78f59e 58%,#5bc6ff 76%,#9d6bff 100%)}
+input.t-ior{--track:linear-gradient(90deg,rgba(255,255,255,.12),rgba(160,220,255,.55) 20%,rgba(255,255,255,.85))}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;background:none;border:0;padding:10px 0;cursor:pointer;text-align:left;font-size:13px}
+.toggle i{position:relative;flex:0 0 auto;width:40px;height:24px;border-radius:12px;background:rgba(255,255,255,.18);transition:background .2s}
+.toggle i::after{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s}
+.toggle[aria-pressed="true"] i{background:#6fc3ff}
+.toggle[aria-pressed="true"] i::after{transform:translateX(16px)}
+.note{margin:6px 0 2px;font-size:12px;color:var(--mute);line-height:1.5;max-width:60ch}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;padding:10px 0 4px}
+.btn{border:1px solid var(--line-2);background:rgba(255,255,255,.08);border-radius:12px;padding:10px 14px;font-weight:500;font-size:13px;cursor:pointer}
+:focus-visible{outline:2px solid #8fd0ff;outline-offset:2px}
+
+.shutter-row{position:fixed;z-index:3;left:0;right:0;bottom:calc(var(--sheetH,120px) + 18px);display:flex;justify-content:center;align-items:center;gap:30px;pointer-events:none}
+.shutter-row>*{pointer-events:auto}
+#shutter{width:70px;height:70px;border-radius:50%;border:4px solid rgba(255,255,255,.92);background:rgba(255,255,255,.18);cursor:pointer;
+  box-shadow:0 2px 24px rgba(0,0,0,.35);transition:transform .12s}
+#shutter:active{transform:scale(.92)}
+.shutter-row .icon-btn{width:46px;height:46px}
+
+.restore{position:fixed;z-index:6;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px)}
+body.noui .top,body.noui .sheet,body.noui .shutter-row{display:none}
+
+.toast{position:fixed;z-index:7;left:50%;top:calc(env(safe-area-inset-top,0px) + 74px);transform:translate(-50%,-8px);max-width:min(90vw,440px);
+  background:rgba(12,14,19,.82);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;
+  padding:10px 14px;font-size:13px;line-height:1.45;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+.photo{position:fixed;inset:0;z-index:10;background:rgba(5,6,8,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px)}
+.photo img{max-width:100%;max-height:70vh;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+.photo .btnrow{justify-content:center}
+.photo a.btn{text-decoration:none;color:var(--ink)}
+.photo p{margin:0;color:var(--mute);font-size:12px;text-align:center;max-width:46ch}
+
+.fail{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;font-size:15px;line-height:1.6;color:var(--ink);z-index:20;background:var(--bg)}
+.fail pre{max-width:90vw;overflow:auto;text-align:left;font:11px var(--mono);color:var(--mute);white-space:pre-wrap}
+
+@media (max-width:420px){
+  .word{font-size:27px}
+  .seg button{padding:8px 11px;font-size:12.5px}
+}
+@media (min-width:900px){
+  .sheet{left:auto;right:16px;bottom:16px;margin:0;width:400px;border-radius:20px;border-bottom:1px solid var(--line);padding-bottom:0}
+  .panes{max-height:min(62vh,560px)}
+  .shutter-row{bottom:28px;right:432px}
+}
+@media (prefers-reduced-motion:reduce){
+  .toast,.chip,.toggle i,.toggle i::after{transition:none}
+}
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="Simulation der Lichtbrechung"></canvas>
+<video id="vid" playsinline muted autoplay></video>
+
+<header class="top">
+  <div class="brand">
+    <span class="word">Refraktor</span>
+    <span class="meta" id="meta">n 1.620 · V 36 · 19:25</span>
+  </div>
+  <div class="topr">
+    <div class="seg" role="tablist" aria-label="Modus">
+      <button id="mAnim" class="on" role="tab" aria-selected="true">Animation</button>
+      <button id="mCam" role="tab" aria-selected="false">Kamera</button>
+    </div>
+    <button class="icon-btn" id="hideUI" aria-label="Oberfläche ausblenden" title="Oberfläche ausblenden">
+      <svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="shutter-row" id="shutterRow" hidden>
+  <button class="icon-btn" id="loadImg" aria-label="Bild laden" title="Bild laden">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 9"/></svg>
+  </button>
+  <button id="shutter" aria-label="Foto aufnehmen" title="Foto aufnehmen"></button>
+  <button class="icon-btn" id="flip" aria-label="Kamera wechseln" title="Kamera wechseln">
+    <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M9.5 13.5a2.8 2.8 0 0 0 5 .9M14.5 12.5a2.8 2.8 0 0 0-5-.9"/><path d="M14.8 15l-.3-1.6 1.6-.2M9.2 10l.3 1.6-1.6.2"/></svg>
+  </button>
+</div>
+
+<section class="sheet" id="sheet">
+  <nav class="tabs" id="tabs" aria-label="Einstellungen"></nav>
+  <div class="panes" id="panes"></div>
+</section>
+
+<button class="icon-btn restore" id="restore" hidden aria-label="Oberfläche einblenden" title="Oberfläche einblenden">
+  <svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+</button>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<div class="photo" id="photo" hidden>
+  <img id="photoImg" alt="Aufgenommenes Bild">
+  <div class="btnrow">
+    <button class="btn" id="sharePhoto">Teilen / Sichern</button>
+    <a class="btn" id="dlPhoto" download="refraktor.jpg" href="#">Download</a>
+    <button class="btn" id="closePhoto">Schließen</button>
+  </div>
+  <p>Auf dem iPhone: Bild lange drücken und „Zu Fotos hinzufügen“ wählen.</p>
+</div>
+
+<input type="file" id="file" accept="image/*" hidden>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const lerp3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+const norm3 = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+
+function fail(msg, detail) {
+  const d = document.createElement('div');
+  d.className = 'fail';
+  d.innerHTML = '<div><p>' + msg + '</p>' + (detail ? '<pre></pre>' : '') + '</div>';
+  if (detail) d.querySelector('pre').textContent = detail;
+  document.body.appendChild(d);
+}
+
+const canvas = $('#gl');
+const gl = canvas.getContext('webgl2', {
+  antialias: false, alpha: false, depth: false, stencil: false,
+  preserveDrawingBuffer: true, powerPreference: 'high-performance'
+});
+if (!gl) { fail('Dieser Browser unterstützt kein WebGL2. Bitte Safari 15+ oder einen aktuellen Chrome/Firefox verwenden.'); return; }
+gl.getExtension('EXT_color_buffer_float');
+gl.getExtension('EXT_color_buffer_half_float');
+
+/* ================================================================
+   GLSL
+   ================================================================ */
+const HEAD = `#version 300 es
+precision highp float;
+precision highp int;
+precision highp sampler2D;
+`;
+
+const COMMON = `
+#define PI 3.14159265359
+uniform float uTime;
+uniform vec3 uSunDir;
+uniform vec3 uSunCol;
+uniform vec3 uZenith;
+uniform vec3 uHorizon;
+uniform float uNight;
+uniform float uDiskK;
+uniform float uHalo;
+uniform float uCloud;
+uniform int uWave;
+uniform float uWaveAmp;
+uniform float uWaveSpeed;
+uniform vec4 uRip[8];
+uniform float uSeed;
+uniform float uBeam;
+uniform float uBeamW;
+float gStars = 1.0;
+
+float hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y)*p3.z); }
+vec2 hash22(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*vec3(0.1031, 0.1030, 0.0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz)*p3.zy); }
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.0 - 2.0*f);
+  return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float fbm(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++){ s += a*vnoise(p); p = p*2.03 + vec2(1.7, 9.2); a *= 0.5; } return s; }
+float fres(float c, float ior){ float r0 = (ior - 1.0)/(ior + 1.0); r0 *= r0; float x = 1.0 - clamp(c, 0.0, 1.0); return r0 + (1.0 - r0)*x*x*x*x*x; }
+
+vec3 skyBase(vec3 d){
+  if (uBeam > 0.5) return mix(vec3(0.002, 0.002, 0.0025), vec3(0.018, 0.018, 0.022), smoothstep(-0.2, 0.9, d.y));
+  float y = d.y;
+  float hy = max(y, 0.0);
+  vec3 col = mix(uHorizon, uZenith, pow(hy, 0.36));
+  vec2 sh = normalize(uSunDir.xz + vec2(1e-5));
+  vec2 dh = normalize(d.xz + vec2(1e-5));
+  float az = max(dot(dh, sh), 0.0);
+  col += uSunCol*0.07*pow(az, 4.0)*exp(-hy*7.0)*uHalo;
+  float sd = max(dot(d, uSunDir), 0.0);
+  col += uSunCol*(0.035*pow(sd, 5.0) + 0.28*pow(sd, 80.0))*uHalo;
+  if (y < 0.0) col = mix(col, uHorizon*0.5, 1.0 - exp(y*5.0));
+  return col;
+}
+vec3 fogCol(vec3 rd){ return skyBase(normalize(vec3(rd.x + 1e-5, 0.0, rd.z))); }
+
+vec3 skyCol(vec3 d, float disk){
+  vec3 col = skyBase(d);
+  if (uBeam > 0.5) return col;
+  float y = d.y;
+  float sd = dot(d, uSunDir);
+  if (y > 0.0 && uNight*gStars > 0.001){
+    vec2 sp = vec2(atan(d.z, d.x), asin(clamp(y, -1.0, 1.0)))*95.0;
+    vec2 id = floor(sp); vec2 f = fract(sp) - 0.5;
+    float h = hash12(id);
+    if (h > 0.982){
+      vec2 o = hash22(id) - 0.5;
+      float st = smoothstep(0.16, 0.0, length(f - o*0.6));
+      col += mix(vec3(1.0, 0.85, 0.7), vec3(0.75, 0.85, 1.0), hash12(id + 3.1))*st*uNight*gStars*(h - 0.982)*110.0*(0.75 + 0.25*sin(uTime*2.7 + h*90.0));
+    }
+  }
+  col += uSunCol*smoothstep(0.99955, 0.99985, sd)*uDiskK*disk;
+  if (y > 0.0 && uCloud > 0.001){
+    vec2 cp = d.xz/(y + 0.1)*0.85 + vec2(uTime*0.006, uTime*0.0025);
+    float f = fbm(cp*1.25);
+    float cov = smoothstep(0.62 - uCloud*0.28, 0.9 - uCloud*0.2, f)*smoothstep(0.0, 0.16, y);
+    float s01 = sd*0.5 + 0.5;
+    vec3 base = uHorizon*0.62 + uZenith*0.35;
+    vec3 cc = base + uSunCol*0.26*(0.25 + 0.75*pow(s01, 3.0)) + uSunCol*0.5*pow(max(sd, 0.0), 24.0)*(1.0 - cov);
+    col = mix(col, cc, cov*0.85);
+  }
+  return col;
+}
+
+float seaOct(vec2 uv, float ch){
+  uv += vnoise(uv);
+  vec2 wv = 1.0 - abs(sin(uv));
+  vec2 swv = abs(cos(uv));
+  wv = mix(wv, swv, wv);
+  return pow(1.0 - pow(wv.x*wv.y, 0.65), ch);
+}
+float rainH(vec2 p, float t){
+  float h = 0.0;
+  for (int s = 0; s < 2; s++){
+    float sc = s == 0 ? 1.5 : 2.6;
+    vec2 q = p*sc + float(s)*17.0;
+    vec2 id = floor(q);
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++){
+      vec2 c = id + vec2(float(i), float(j));
+      vec2 r = hash22(c);
+      float per = 1.2 + r.x*1.6;
+      float tt = t + r.y*per*7.0;
+      float age = mod(tt, per);
+      vec2 pos = c + 0.15 + 0.7*hash22(c + floor(tt/per)*3.1);
+      float d = length(q - pos);
+      float x = d - age*0.9;
+      h += sin(x*24.0)*exp(-x*x*40.0)*exp(-age*2.4)/(1.0 + d*4.0);
+    }
+  }
+  return h*0.022;
+}
+float tapRip(vec2 p){
+  float h = 0.0;
+  for (int i = 0; i < 8; i++){
+    vec4 r = uRip[i];
+    if (r.w <= 0.0) continue;
+    float age = uTime - r.z;
+    if (age < 0.0) continue;
+    float d = length(p - r.xy);
+    float x = d - age*1.35;
+    h += r.w*sin(x*9.0)*exp(-x*x*2.2)*exp(-age*0.45)/(1.0 + d*1.2);
+  }
+  return h*0.07;
+}
+float waveH(vec2 p){
+  float t = uTime*uWaveSpeed;
+  float h = 0.0;
+  if (uWave == 0){
+    h = 0.004*(sin(dot(p, vec2(3.1, 1.7)) + t*2.0) + sin(dot(p, vec2(-2.3, 3.3)) + t*2.6));
+  } else if (uWave == 1){
+    h = 0.12*sin(dot(p, vec2(0.42, 0.18)) - t*0.9) + 0.07*sin(dot(p, vec2(-0.28, 0.52)) - t*1.15)
+      + 0.03*sin(dot(p, vec2(1.3, 0.9)) - t*1.8) + 0.012*sin(dot(p, vec2(-2.4, 1.6)) - t*2.6);
+  } else if (uWave == 2 || uWave == 4){
+    bool storm = uWave == 4;
+    float amp = storm ? 0.40 : 0.085;
+    float fr = storm ? 0.22 : 0.8;
+    float ch = storm ? 4.0 : 3.0;
+    vec2 q = p*fr; q.x *= 0.75;
+    float tt = t*(storm ? 0.8 : 1.0);
+    for (int i = 0; i < 4; i++){
+      float d = seaOct(q + tt, ch) + seaOct(q - tt, ch);
+      h += d*amp;
+      q = mat2(1.6, 1.2, -1.2, 1.6)*q;
+      amp *= 0.22;
+      ch = mix(ch, 1.0, 0.2);
+    }
+    h -= storm ? 0.45 : 0.09;
+  } else if (uWave == 3){
+    h = rainH(p, t) + 0.003*sin(dot(p, vec2(2.0, 1.0)) + t);
+  } else {
+    vec2 a = vec2(-1.6, 0.4), b = vec2(1.6, -0.4);
+    float da = length(p - a), db = length(p - b);
+    h = 0.035*(sin(da*5.5 - t*3.5)/(1.0 + da*0.6) + sin(db*5.5 - t*3.5)/(1.0 + db*0.6));
+  }
+  return (h + tapRip(p))*uWaveAmp;
+}
+vec3 waveN(vec2 p, float e){
+  float c = waveH(p);
+  float hx = waveH(p + vec2(e, 0.0));
+  float hz = waveH(p + vec2(0.0, e));
+  return normalize(vec3(c - hx, e, c - hz));
+}
+`;
+
+const CAUSTIC = `
+uniform vec2 uCauC;
+uniform vec2 uCauU;
+uniform vec2 uCauH;
+vec2 cauUV(vec2 xz){
+  vec2 d = xz - uCauC;
+  return vec2(dot(d, uCauU)/uCauH.x, dot(d, vec2(-uCauU.y, uCauU.x))/uCauH.y)*0.5 + 0.5;
+}
+`;
+const CAUSTIC_FS = `
+uniform sampler2D uCau;
+uniform vec2 uCauTex;
+uniform float uCauK;
+vec3 cauSample(vec2 uv){
+  vec2 e = 1.6/uCauTex;
+  return (texture(uCau, uv).rgb*4.0 + texture(uCau, uv + vec2(e.x, 0.0)).rgb + texture(uCau, uv - vec2(e.x, 0.0)).rgb
+        + texture(uCau, uv + vec2(0.0, e.y)).rgb + texture(uCau, uv - vec2(0.0, e.y)).rgb)*0.125*uCauK;
+}
+`;
+
+const FLOOR = `
+uniform int uFloor;
+vec3 floorAlb(vec2 p, float dist){
+  float w = 0.004 + dist*0.006;
+  float far = clamp(dist/45.0, 0.0, 1.0);
+  if (uFloor == 0){
+    float n = vnoise(p*1.1)*0.5 + vnoise(p*4.3)*0.3 + mix(vnoise(p*16.0), 0.5, far)*0.2;
+    vec3 c = mix(vec3(0.36, 0.345, 0.32), vec3(0.58, 0.56, 0.52), n);
+    vec2 g = abs(fract(p*0.5 + 0.5) - 0.5)*2.0;
+    float j = smoothstep(0.0, 0.012 + w, min(g.x, g.y));
+    return c*mix(mix(0.55, 0.92, far), 1.0, j);
+  }
+  if (uFloor == 1){
+    vec2 q = vec2(p.x*0.45, p.y*3.2);
+    float row = floor(q.y);
+    q.x += hash12(vec2(row, 7.0))*5.0;
+    float plank = floor(q.x);
+    float h = hash12(vec2(row, plank));
+    float grain = vnoise(vec2(p.x*1.2 + h*40.0, p.y*38.0))*0.6 + vnoise(vec2(p.x*0.3, p.y*9.0 + h*9.0))*0.4;
+    vec3 c = mix(vec3(0.20, 0.105, 0.05), vec3(0.47, 0.28, 0.14), 0.25 + 0.45*h + 0.35*grain);
+    vec2 f = fract(q);
+    float gap = smoothstep(0.0, 0.03 + w*3.0, f.y)*smoothstep(1.0, 0.97 - w*3.0, f.y)*smoothstep(0.0, 0.004 + w, f.x);
+    return c*mix(0.45, 1.0, gap);
+  }
+  if (uFloor == 2){
+    float s = sin(p.x*PI/0.8)*sin(p.y*PI/0.8);
+    float k = smoothstep(-w*6.0 - 0.02, w*6.0 + 0.02, s);
+    return mix(vec3(0.035, 0.035, 0.04), vec3(0.72, 0.71, 0.68), k);
+  }
+  if (uFloor == 3){
+    vec2 q = p*4.0;
+    vec2 id = floor(q);
+    vec2 f = abs(fract(q) - 0.5)*2.0;
+    float gr = smoothstep(1.0, 0.86 - w*4.0, max(f.x, f.y));
+    float h = hash12(id);
+    vec3 tile = mix(vec3(0.55, 0.78, 0.82), vec3(0.74, 0.89, 0.91), h);
+    if (h > 0.94) tile = vec3(0.14, 0.42, 0.64);
+    float lane = abs(fract(p.x/3.0 + 0.5) - 0.5)*3.0;
+    tile = mix(vec3(0.05, 0.16, 0.40), tile, smoothstep(0.17, 0.2 + w, lane));
+    vec3 grout = vec3(0.6, 0.64, 0.64);
+    return mix(grout, tile, mix(gr, 0.85, clamp(w*12.0, 0.0, 1.0)));
+  }
+  float r = sin(p.x*5.0 + vnoise(p*0.7)*5.0 + vnoise(p*2.3))*0.5 + 0.5;
+  float n = vnoise(p*23.0);
+  return vec3(0.78, 0.68, 0.50)*(0.82 + 0.18*r)*(0.9 + 0.14*n);
+}
+`;
+
+const SDF = `
+uniform int uShape;
+uniform mat3 uObjRot;
+uniform vec3 uObjPos;
+uniform float uObjR;
+uniform float uStepK;
+uniform vec3 uAbsorb;
+
+float sdRoundBox(vec3 p, vec3 b, float r){ vec3 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r; }
+float sdGem(vec3 p){
+  float r = length(p.xz);
+  float a = atan(p.z, p.x);
+  const float s8 = PI/4.0;
+  const float s16 = PI/8.0;
+  float a8 = mod(a + s8*0.5, s8) - s8*0.5;
+  float a8b = mod(a, s8) - s8*0.5;
+  float a16 = mod(a + s16*0.5, s16) - s16*0.5;
+  float x8 = r*cos(a8), x8b = r*cos(a8b), x16 = r*cos(a16);
+  float d = x16 - 1.0;
+  d = max(d, p.y - 0.34);
+  d = max(d, dot(vec2(x8, p.y), vec2(0.527, 0.850)) - 0.5695);
+  d = max(d, dot(vec2(x8b, p.y), vec2(0.371, 0.928)) - 0.508);
+  d = max(d, dot(vec2(x16, p.y), vec2(0.669, 0.743)) - 0.706);
+  d = max(d, dot(vec2(x8, p.y), vec2(0.751, -0.661)) - 0.784);
+  d = max(d, dot(vec2(x16, p.y), vec2(0.725, -0.689)) - 0.7595);
+  return d;
+}
+float sdShape(vec3 p){
+  if (uShape == 1) return length(p) - 1.0;
+  if (uShape == 2){ vec3 q = abs(p); return max(q.z - 1.15, max(q.x*0.866025 + p.y*0.5, -p.y) - 0.45); }
+  if (uShape == 3) return max(max(length(p - vec3(0.0, 0.0, 1.75)) - 2.0, length(p + vec3(0.0, 0.0, 1.75)) - 2.0), length(p.xy) - 0.95);
+  if (uShape == 4) return sdGem(p/1.1)*1.1;
+  if (uShape == 5){ vec2 q = vec2(length(p.xz) - 0.82, p.y); return length(q) - 0.3; }
+  if (uShape == 6) return sdRoundBox(p, vec3(0.62), 0.09);
+  float k = 1.25*p.y; float c = cos(k), s = sin(k);
+  vec2 xz = mat2(c, -s, s, c)*p.xz;
+  return sdRoundBox(vec3(xz.x, p.y, xz.y), vec3(0.42, 1.05, 0.42), 0.1);
+}
+float sdObj(vec3 p){ return sdShape(uObjRot*(p - uObjPos)); }
+vec3 nObj(vec3 p){
+  const vec2 k = vec2(1.0, -1.0);
+  const float e = 0.0012;
+  return normalize(k.xyy*sdObj(p + k.xyy*e) + k.yyx*sdObj(p + k.yyx*e) + k.yxy*sdObj(p + k.yxy*e) + k.xxx*sdObj(p + k.xxx*e));
+}
+vec2 bsph(vec3 ro, vec3 rd){
+  vec3 oc = ro - uObjPos;
+  float b = dot(oc, rd);
+  float c = dot(oc, oc) - uObjR*uObjR;
+  float h = b*b - c;
+  if (h < 0.0) return vec2(-1.0);
+  h = sqrt(h);
+  return vec2(-b - h, -b + h);
+}
+bool marchOut(vec3 ro, vec3 rd, out float t){
+  vec2 b = bsph(ro, rd);
+  t = 0.0;
+  if (b.y < 0.0) return false;
+  t = max(b.x, 0.0);
+  for (int i = 0; i < 72; i++){
+    float d = sdObj(ro + rd*t);
+    if (d < 0.0007) return true;
+    t += d*uStepK;
+    if (t > b.y) return false;
+  }
+  return false;
+}
+float marchIn(vec3 ro, vec3 rd){
+  float t = 0.0;
+  for (int i = 0; i < 56; i++){
+    float d = -sdObj(ro + rd*t);
+    if (d < 0.0007) break;
+    t += d*uStepK;
+  }
+  return t;
+}
+void glassPath(inout vec3 pos, inout vec3 dir, inout vec3 thr, vec3 n, float ior){
+  dir = refract(dir, n, 1.0/ior);
+  pos -= n*0.004;
+  for (int seg = 0; seg < 7; seg++){
+    float t = marchIn(pos, dir);
+    vec3 q = pos + dir*t;
+    vec3 m = nObj(q);
+    thr *= exp(-uAbsorb*t);
+    vec3 o = refract(dir, -m, ior);
+    if (dot(o, o) < 1e-5){ dir = reflect(dir, -m); pos = q - m*0.004; continue; }
+    thr *= 1.0 - fres(dot(o, m), ior);
+    dir = o; pos = q + m*0.004;
+    float t2;
+    if (!marchOut(pos, dir, t2)) return;
+    q = pos + dir*t2; m = nObj(q);
+    thr *= 1.0 - fres(-dot(dir, m), ior);
+    dir = refract(dir, m, 1.0/ior);
+    pos = q - m*0.004;
+  }
+}
+`;
+
+const SPEC_U = `
+uniform int uS;
+uniform vec3 uSpecW[8];
+uniform float uSpecO[8];
+uniform float uIOR;
+uniform float uDisp;
+`;
+
+const VS_FULL = HEAD + `
+out vec2 vUv;
+void main(){
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2))*2.0 - 1.0;
+  vUv = p*0.5 + 0.5;
+  gl_Position = vec4(p, 0.0, 1.0);
+}`;
+
+const CAM_U = `
+uniform vec3 uCamPos;
+uniform mat3 uCamRot;
+uniform float uFovK;
+uniform vec2 uRes;
+uniform float uFog;
+uniform float uEnc;
+`;
+
+const FS_GLASS = HEAD + COMMON + CAUSTIC + CAUSTIC_FS + FLOOR + SDF + SPEC_U + CAM_U + `
+out vec4 o;
+float softShadow(vec3 ro, vec3 rd){
+  float res = 1.0, t = 0.03;
+  for (int i = 0; i < 40; i++){
+    float h = sdObj(ro + rd*t);
+    res = min(res, 9.0*h/t);
+    t += clamp(h, 0.02, 0.35);
+    if (res < 0.002 || t > 8.0) break;
+  }
+  return clamp(res, 0.0, 1.0);
+}
+vec3 shadeFloor(vec3 p, vec3 rd, float dist){
+  vec3 alb = floorAlb(p.xz, dist);
+  float sunY = max(uSunDir.y, 0.0);
+  float sh = 1.0;
+  vec3 oc = p - uObjPos;
+  float b = dot(oc, uSunDir);
+  float hh = b*b - (dot(oc, oc) - uObjR*uObjR);
+  if (hh > 0.0 && -b + sqrt(hh) > 0.0) sh = softShadow(p + vec3(0.0, 0.002, 0.0), uSunDir);
+  vec3 cau = vec3(0.0);
+  vec2 uv = cauUV(p.xz);
+  if (all(greaterThan(uv, vec2(0.002))) && all(lessThan(uv, vec2(0.998)))) cau = cauSample(uv);
+  float ao = 1.0;
+  if (length(p.xz - uObjPos.xz) < uObjR*2.5){
+    float d = sdObj(p + vec3(0.0, 0.12, 0.0));
+    ao = 1.0 - 0.55*exp(-max(d, 0.0)*3.5);
+  }
+  vec3 amb = (uZenith*0.5 + uHorizon*0.12 + uSunCol*sunY*0.16)*ao;
+  if (uBeam > 0.5){
+    vec3 T1 = normalize(cross(uSunDir, vec3(0.0, 1.0, 0.0)));
+    vec3 T2 = cross(T1, uSunDir);
+    vec3 q = p - uObjPos;
+    sh *= smoothstep(uBeamW, uBeamW*0.75, abs(dot(q, T2))/uObjR)*smoothstep(0.75, 0.68, abs(dot(q, T1))/uObjR);
+    amb = vec3(0.004, 0.004, 0.005) + uSunCol*0.004;
+  }
+  vec3 col = alb*(uSunCol*(sh*sunY + cau) + amb);
+  float fr = 0.04 + 0.96*pow(1.0 - clamp(-rd.y, 0.0, 1.0), 5.0);
+  float gloss = uFloor == 2 ? 0.55 : (uFloor == 1 ? 0.3 : 0.12);
+  col += skyCol(reflect(rd, vec3(0.0, 1.0, 0.0)), uFloor == 2 ? 0.08 : 0.0)*fr*gloss*mix(1.0, ao, 0.7);
+  float fg = 1.0 - exp(-dist*uFog);
+  return mix(col, fogCol(rd), fg);
+}
+vec3 envScene(vec3 ro, vec3 rd, float d0){
+  if (rd.y < -0.0005){
+    float t = -ro.y/rd.y;
+    return shadeFloor(ro + rd*t, rd, d0 + t);
+  }
+  return skyCol(rd, 1.0);
+}
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes)/uRes.y;
+  vec3 rd = normalize(uCamRot*vec3(uv*uFovK, -1.0));
+  vec3 ro = uCamPos;
+  vec3 col;
+  float t;
+  bool hit = marchOut(ro, rd, t);
+  float tFloor = rd.y < 0.0 ? -ro.y/rd.y : 1e9;
+  if (hit && t < tFloor){
+    vec3 p = ro + rd*t;
+    vec3 n = nObj(p);
+    float F = fres(dot(-rd, n), uIOR);
+    vec3 refl = envScene(p + n*0.004, reflect(rd, n), t);
+    vec3 tr = vec3(0.0);
+    for (int i = 0; i < 8; i++){
+      if (i >= uS) break;
+      float ior = uIOR + uDisp*uSpecO[i];
+      vec3 pos = p, dir = rd, thr = vec3(1.0);
+      glassPath(pos, dir, thr, n, ior);
+      tr += uSpecW[i]*thr*envScene(pos, dir, t + length(pos - p));
+    }
+    col = refl*F + tr*(1.0 - F);
+  } else {
+    col = envScene(ro, rd, 0.0);
+  }
+  if (uBeam > 0.5){
+    float tEnd = min(hit ? t : 1e9, tFloor);
+    vec3 T1 = normalize(cross(uSunDir, vec3(0.0, 1.0, 0.0)));
+    vec3 T2 = cross(T1, uSunDir);
+    vec3 oc = ro - uObjPos;
+    vec2 ab2 = vec2(dot(oc, T2), dot(rd, T2))/uObjR;
+    vec2 ab1 = vec2(dot(oc, T1), dot(rd, T1))/uObjR;
+    vec2 i2 = (vec2(-uBeamW, uBeamW) - ab2.x)/ab2.y;
+    vec2 i1 = (vec2(-0.75, 0.75) - ab1.x)/ab1.y;
+    float s0 = max(max(min(i2.x, i2.y), min(i1.x, i1.y)), 0.0);
+    float s1 = min(min(max(i2.x, i2.y), max(i1.x, i1.y)), tEnd);
+    if (s1 > s0){
+      vec3 mid = ro + rd*0.5*(s0 + s1);
+      float behind = dot(mid - uObjPos, uSunDir) < 0.0 ? 0.35 : 1.0;
+      float ph = 0.6 + 0.4*pow(max(dot(rd, uSunDir), 0.0), 6.0);
+      col += uSunCol*(s1 - s0)*0.02*behind*ph;
+    }
+  }
+  o = vec4(max(col, 0.0)*uEnc, 1.0);
+}`;
+
+const VS_PH_GLASS = HEAD + COMMON + CAUSTIC + SDF + SPEC_U + `
+uniform ivec2 uGrid;
+uniform float uPt;
+uniform float uEnergy;
+out vec3 vCol;
+void main(){
+  int id = gl_VertexID;
+  int ch = id % uS;
+  int g = id / uS;
+  int gx = g % uGrid.x;
+  int gy = g / uGrid.x;
+  vec2 f = (vec2(float(gx), float(gy)) + hash22(vec2(float(gx), float(gy))*0.713 + uSeed))/vec2(uGrid)*2.0 - 1.0;
+  gl_PointSize = uPt;
+  gl_Position = vec4(-10.0, -10.0, 0.0, 1.0);
+  vCol = vec3(0.0);
+  if (uBeam > 0.5) f *= vec2(0.75, uBeamW);
+  else if (dot(f, f) > 1.0) return;
+  vec3 L = uSunDir;
+  vec3 T1 = normalize(cross(L, vec3(0.0, 1.0, 0.0)));
+  vec3 T2 = cross(T1, L);
+  vec3 ro = uObjPos + (f.x*T1 + f.y*T2)*uObjR + L*(uObjR + 0.2);
+  vec3 rd = -L;
+  float t;
+  if (!marchOut(ro, rd, t)) return;
+  vec3 pos = ro + rd*t;
+  vec3 n = nObj(pos);
+  float ior = uIOR + uDisp*uSpecO[ch];
+  vec3 thr = vec3(1.0 - fres(dot(-rd, n), ior));
+  vec3 dir = rd;
+  glassPath(pos, dir, thr, n, ior);
+  if (dir.y > -0.01) return;
+  vec3 hit = pos + dir*(-pos.y/dir.y);
+  vec2 uv = cauUV(hit.xz);
+  if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return;
+  gl_Position = vec4(uv*2.0 - 1.0, 0.0, 1.0);
+  vCol = uSpecW[ch]*thr*uEnergy;
+}`;
+
+const FS_WATER = HEAD + COMMON + CAUSTIC + CAUSTIC_FS + FLOOR + SPEC_U + CAM_U + `
+uniform vec3 uAbsorb;
+uniform float uDepth;
+uniform float uWaveBound;
+out vec4 o;
+vec3 underwater(vec3 p, vec3 tr, float dist){
+  float tf = (-uDepth - p.y)/min(tr.y, -0.05);
+  vec3 q = p + tr*tf;
+  vec3 alb = floorAlb(q.xz, dist + tf);
+  float sunY = max(uSunDir.y, 0.0);
+  vec3 rs = refract(-uSunDir, vec3(0.0, 1.0, 0.0), 1.0/uIOR);
+  vec3 sig = uAbsorb + 0.04;
+  vec3 flatL = vec3(sunY*0.97)*exp(-sig*uDepth/max(-rs.y, 0.2));
+  vec2 uv = cauUV(q.xz);
+  vec2 ed = smoothstep(vec2(0.0), vec2(0.06), uv)*smoothstep(vec2(1.0), vec2(0.94), uv);
+  float w = ed.x*ed.y;
+  vec3 cau = w > 0.0 ? cauSample(uv) : vec3(0.0);
+  cau = mix(flatL, cau, w);
+  vec3 amb = (uZenith*0.8 + uHorizon*0.12)*exp(-sig*uDepth)*0.8;
+  vec3 lit = alb*(uSunCol*cau + amb);
+  vec3 att = exp(-sig*tf);
+  vec3 Lin = uSunCol*sunY*0.5 + uZenith*0.9 + uHorizon*0.1;
+  vec3 scat = Lin*(0.04/sig)*0.35;
+  return lit*att + scat*(1.0 - att);
+}
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes)/uRes.y;
+  vec3 rd = normalize(uCamRot*vec3(uv*uFovK, -1.0));
+  vec3 ro = uCamPos;
+  vec3 col;
+  if (rd.y > -0.002){
+    col = skyCol(rd, 1.0);
+  } else {
+    float t0 = max((ro.y - uWaveBound)/(-rd.y), 0.0);
+    float t1 = min((ro.y + uWaveBound)/(-rd.y), 600.0);
+    float t = t1;
+    float prev = t0;
+    for (int i = 1; i <= 36; i++){
+      float ti = t0 + (t1 - t0)*pow(float(i)/36.0, 1.8);
+      vec3 p = ro + rd*ti;
+      if (p.y < waveH(p.xz)){
+        float a = prev, b = ti;
+        for (int k = 0; k < 6; k++){
+          float m = 0.5*(a + b);
+          vec3 q = ro + rd*m;
+          if (q.y < waveH(q.xz)) b = m; else a = m;
+        }
+        t = 0.5*(a + b);
+        break;
+      }
+      prev = ti;
+    }
+    vec3 p = ro + rd*t;
+    float fade = smoothstep(15.0, 140.0, t);
+    vec3 n = waveN(p.xz, 0.01 + t*0.002);
+    if (uWave != 0){
+      vec2 np = p.xz*7.0;
+      float n1 = vnoise(np + uTime*vec2(0.9, 0.4)*uWaveSpeed);
+      float n2 = vnoise(np*1.9 - uTime*vec2(0.5, 1.1)*uWaveSpeed + 7.0);
+      n = normalize(n + vec3(n1 - 0.5, 0.0, n2 - 0.5)*0.14*min(uWaveAmp, 1.5)*(1.0 - fade));
+    }
+    n = normalize(mix(n, vec3(0.0, 1.0, 0.0), fade*0.85));
+    float cosi = clamp(dot(-rd, n), 0.0, 1.0);
+    float F = fres(cosi, uIOR);
+    vec3 rr = reflect(rd, n);
+    rr.y = abs(rr.y);
+    gStars = 0.1;
+    vec3 refl = skyCol(rr, 1.0);
+    gStars = 1.0;
+    float sd = max(dot(rr, uSunDir), 0.0);
+    refl += uSunCol*pow(sd, 700.0)*uDiskK*0.25;
+    vec3 tr = refract(rd, n, 1.0/uIOR);
+    vec3 under = underwater(p, tr, t);
+    col = mix(under, refl, F);
+    col = mix(col, fogCol(rd), 1.0 - exp(-t*uFog*0.6));
+  }
+  o = vec4(max(col, 0.0)*uEnc, 1.0);
+}`;
+
+const VS_PH_WATER = HEAD + COMMON + CAUSTIC + SPEC_U + `
+uniform vec3 uAbsorb;
+uniform float uDepth;
+uniform ivec2 uGrid;
+uniform float uPt;
+uniform float uEnergy;
+uniform vec2 uSurfC;
+out vec3 vCol;
+void main(){
+  int id = gl_VertexID;
+  int ch = id % uS;
+  int g = id / uS;
+  int gx = g % uGrid.x;
+  int gy = g / uGrid.x;
+  vec2 f = (vec2(float(gx), float(gy)) + hash22(vec2(float(gx), float(gy))*0.713 + uSeed))/vec2(uGrid)*2.0 - 1.0;
+  vec2 V = vec2(-uCauU.y, uCauU.x);
+  vec2 xz = uSurfC + uCauU*f.x*uCauH.x*1.08 + V*f.y*uCauH.y*1.08;
+  vec3 n = waveN(xz, 0.02);
+  vec3 s = vec3(xz.x, waveH(xz), xz.y);
+  float ior = uIOR + uDisp*uSpecO[ch];
+  vec3 r = refract(-uSunDir, n, 1.0/ior);
+  float T = 1.0 - fres(dot(uSunDir, n), ior);
+  gl_PointSize = uPt;
+  gl_Position = vec4(-10.0, -10.0, 0.0, 1.0);
+  vCol = vec3(0.0);
+  if (r.y > -0.01) return;
+  float tf = (-uDepth - s.y)/r.y;
+  vec3 hit = s + r*tf;
+  vec2 uv = cauUV(hit.xz);
+  if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return;
+  gl_Position = vec4(uv*2.0 - 1.0, 0.0, 1.0);
+  vCol = uSpecW[ch]*T*exp(-(uAbsorb + 0.04)*tf)*uEnergy;
+}`;
+
+const FS_PHOTON = HEAD + `
+in vec3 vCol;
+out vec4 o;
+void main(){ o = vec4(vCol, 1.0); }`;
+
+const FS_FILTER = HEAD + COMMON + SPEC_U + `
+in vec2 vUv;
+out vec4 o;
+uniform sampler2D uVid;
+uniform vec2 uVidSize;
+uniform float uMirror;
+uniform int uStruct;
+uniform float uStrength;
+uniform float uScale;
+uniform float uFrost;
+uniform vec2 uPt;
+uniform vec2 uRes;
+uniform vec3 uGain;
+uniform vec3 uLift;
+uniform float uSat;
+uniform vec3 uLdir;
+uniform vec2 uLeakPos;
+uniform float uLeak;
+uniform float uEnc;
+float gAsp;
+vec2 gP;
+
+vec3 vid(vec2 uv, float lod){
+  vec2 s = uv - 0.5;
+  float av = uVidSize.x/uVidSize.y;
+  if (gAsp > av) s.y *= av/gAsp; else s.x *= gAsp/av;
+  s += 0.5;
+  if (uMirror > 0.5) s.x = 1.0 - s.x;
+  vec3 c = textureLod(uVid, s, lod).rgb;
+  return pow(c, vec3(2.2));
+}
+vec3 rainbow(float x){ return clamp(abs(mod(x*6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
+
+vec3 sRain(vec2 q){
+  float t = uTime;
+  vec2 p = q*0.6;
+  float h = 0.0, m = 0.0;
+  for (int L = 0; L < 2; L++){
+    float sc = L == 0 ? 3.0 : 7.0;
+    vec2 g = p*sc + float(L)*13.7;
+    vec2 id = floor(g);
+    vec2 f = fract(g);
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++){
+      vec2 c = id + vec2(float(i), float(j));
+      vec2 r = hash22(c);
+      float life = fract(t*0.06 + r.x*3.0);
+      float rad = (0.10 + 0.22*r.y)*smoothstep(0.0, 0.08, life)*smoothstep(1.0, 0.75, life);
+      vec2 pos = vec2(float(i), float(j)) + 0.2 + 0.6*hash22(c + 7.3);
+      vec2 d = (f - pos)*vec2(1.0, 1.12);
+      float dl = length(d);
+      float k = clamp(1.0 - (dl*dl)/(rad*rad + 1e-5), 0.0, 1.0);
+      h = max(h, sqrt(k)*rad/sc);
+      m = max(m, smoothstep(rad, rad*0.7, dl));
+    }
+  }
+  vec2 g = p*vec2(2.0, 1.0);
+  float col = floor(g.x);
+  float rx = hash12(vec2(col, 1.0));
+  float cy0 = floor(g.y/3.0);
+  float ly = g.y - cy0*3.0;
+  float speed = 0.35 + rx*0.5;
+  float cy = 3.0*(1.0 - fract(t*speed*0.18 + hash12(vec2(col, cy0))));
+  float x0 = 0.5 + 0.22*sin(g.y*2.3 + rx*6.0);
+  float dx = g.x - col - x0;
+  vec2 dd = vec2(dx, (ly - cy)*0.75);
+  float rad = 0.16 + 0.06*rx;
+  float dl = length(dd);
+  float k = clamp(1.0 - dl*dl/(rad*rad), 0.0, 1.0);
+  h = max(h, sqrt(k)*rad*0.5);
+  m = max(m, smoothstep(rad, rad*0.7, dl));
+  float above = ly - cy;
+  if (above > 0.0 && above < 1.8){
+    float tr = smoothstep(0.1, 0.0, abs(dx))*smoothstep(1.8, 0.2, above);
+    m = max(m, tr);
+    vec2 td = vec2(dx, (fract(above*5.0) - 0.5)*0.2);
+    float trad = 0.05*(1.0 - above/1.8)*step(0.4, hash12(vec2(col, floor(above*5.0) + cy0*17.0)));
+    float tk = clamp(1.0 - dot(td, td)/(trad*trad + 1e-5), 0.0, 1.0);
+    h = max(h, sqrt(tk)*trad*0.5);
+  }
+  return vec3(h*2.0, m, 1.0);
+}
+vec3 structure(vec2 q){
+  float t = uTime;
+  if (uStruct == 0){
+    vec2 p = q*1.6;
+    float h = 0.0, a = 0.07, ch = 2.2;
+    for (int i = 0; i < 3; i++){
+      h += (seaOct(p + t*0.4, ch) + seaOct(p - t*0.37, ch))*a;
+      p = mat2(1.6, 1.2, -1.2, 1.6)*p;
+      a *= 0.28;
+    }
+    return vec3(h + tapRip(q)*1.5, 1.0, 1.0);
+  }
+  if (uStruct == 1) return sRain(q);
+  if (uStruct == 2){
+    float f = fract(q.x*3.0) - 0.5;
+    return vec3(sqrt(max(0.25 - f*f, 0.0))/3.0*0.7, 1.0, 1.0);
+  }
+  if (uStruct == 3){
+    vec2 p = q*2.5;
+    vec2 id = floor(p), f = fract(p);
+    float md = 8.0;
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++){
+      vec2 c = vec2(float(i), float(j));
+      vec2 r = c + hash22(id + c) - f;
+      md = min(md, dot(r, r));
+    }
+    return vec3(-md*0.12, 1.0, 1.0);
+  }
+  if (uStruct == 4){
+    vec2 p = q*1.2;
+    vec2 f = fract(p) - 0.5;
+    float pil = (1.0 - 4.0*f.x*f.x)*(1.0 - 4.0*f.y*f.y);
+    float edge = max(abs(f.x), abs(f.y));
+    float rip = 0.012*cos(length(f)*38.0)*(1.0 - 2.0*edge);
+    float shade = mix(1.0, 0.5, smoothstep(0.455, 0.49, edge));
+    return vec3(pil*0.13 + rip, 1.0, shade);
+  }
+  if (uStruct == 5){
+    vec2 p = q*1.8;
+    vec2 sH = vec2(1.0, 1.7320508);
+    vec2 hh = sH*0.5;
+    vec2 a = mod(p, sH) - hh;
+    vec2 b = mod(p - hh, sH) - hh;
+    vec2 g = dot(a, a) < dot(b, b) ? a : b;
+    vec2 id = p - g;
+    vec2 tilt = (hash22(floor(id*10.0 + 0.5)) - 0.5)*0.9;
+    vec2 ag = abs(g);
+    float edge = max(dot(ag, vec2(0.5, 0.8660254)), ag.x);
+    float shade = mix(1.0, 0.78, smoothstep(0.46, 0.5, edge));
+    return vec3(dot(g, tilt)/1.8, 1.0, shade);
+  }
+  if (uStruct == 6){
+    vec2 nrm = vec2(cos(0.35), sin(0.35));
+    float d = dot(q - gP, nrm);
+    float W = 0.9;
+    float h = abs(d) < W ? (W - abs(d))*0.9 : 0.0;
+    return vec3(h, 1.0, 1.0);
+  }
+  if (uStruct == 8){
+    vec2 d = q - gP;
+    float r = length(d);
+    float a = atan(d.y, d.x);
+    const float N = 7.0;
+    float sec = 2.0*PI/N;
+    float si = floor(a/sec);
+    float ring = floor(r*2.2);
+    float ca = (si + 0.5)*sec;
+    vec2 dir = vec2(cos(ca), sin(ca));
+    float h = r < 0.3 ? 0.0 : dot(d, dir)*(hash12(vec2(si, ring)) - 0.5)*0.7
+                              + dot(d, vec2(-dir.y, dir.x))*(hash12(vec2(ring, si + 9.0)) - 0.5)*0.6;
+    float af = abs(a - ca);
+    float shade = mix(1.0, 0.85, smoothstep(sec*0.47, sec*0.5, af));
+    return vec3(h, 1.0, shade);
+  }
+  float h = 0.10*sin(q.x*2.6 + 1.3*sin(q.y*1.7)) + 0.06*sin(q.y*3.9 + 1.4*sin(q.x*1.2 + 0.5));
+  return vec3(h, 1.0, 1.0);
+}
+vec3 lensBall(vec2 uv){
+  float R = (0.16 + 0.14*uScale)*min(1.0, gAsp*1.25);
+  vec2 d = (uv - uPt)*vec2(gAsp, 1.0)/R;
+  float r2 = dot(d, d);
+  vec3 bg = vid(uv, 1.0 + uFrost*5.0);
+  if (r2 >= 1.0){
+    vec2 sd = d - vec2(0.25, -1.05);
+    bg *= 1.0 - 0.35*exp(-dot(sd*vec2(0.9, 3.0), sd*vec2(0.9, 3.0)));
+    return bg;
+  }
+  vec3 n = vec3(d, sqrt(1.0 - r2));
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 8; i++){
+    if (i >= uS) break;
+    float ior = uIOR + uDisp*uSpecO[i];
+    vec3 t1 = refract(vec3(0.0, 0.0, -1.0), n, 1.0/ior);
+    vec3 p2 = n + t1*(-2.0*dot(n, t1));
+    vec3 t2 = refract(t1, -p2, ior);
+    if (dot(t2, t2) < 1e-5) t2 = reflect(t1, -p2);
+    float s = (-4.0 - p2.z)/min(t2.z, -0.05);
+    vec2 hp = p2.xy + t2.xy*s;
+    vec2 suv = uPt + hp*R*0.28*uStrength/vec2(gAsp, 1.0);
+    acc += vid(suv, 0.0)*uSpecW[i];
+  }
+  float F = fres(n.z, uIOR);
+  vec3 refl = vid(uPt + vec2(-d.x, d.y)*R*0.9/vec2(gAsp, 1.0), 4.0)*0.8;
+  vec3 col = mix(acc, refl, F);
+  vec3 rv = reflect(vec3(0.0, 0.0, -1.0), n);
+  col += uSunCol*pow(max(dot(rv, normalize(uLdir)), 0.0), 120.0)*2.0;
+  col *= 1.0 - 0.25*pow(r2, 4.0);
+  return mix(bg, col, smoothstep(1.0, 0.97, r2));
+}
+void main(){
+  gAsp = uRes.x/uRes.y;
+  vec2 uv = vUv;
+  float K = 3.0/uScale;
+  vec2 q = (uv - 0.5)*vec2(gAsp, 1.0)*K;
+  gP = (uPt - 0.5)*vec2(gAsp, 1.0)*K;
+  vec3 col;
+  if (uStruct == 7){
+    col = lensBall(uv);
+  } else {
+    const float e = 0.004;
+    vec3 c = structure(q);
+    float hx1 = structure(q + vec2(e, 0.0)).x, hx0 = structure(q - vec2(e, 0.0)).x;
+    float hy1 = structure(q + vec2(0.0, e)).x, hy0 = structure(q - vec2(0.0, e)).x;
+    vec2 g = vec2(hx1 - hx0, hy1 - hy0)/(2.0*e);
+    float lap = (hx1 + hx0 + hy1 + hy0 - 4.0*c.x)/(e*e);
+    vec3 n = normalize(vec3(-g, 1.0));
+    float lod = uFrost*(1.2 + 4.8*(1.0 - c.y));
+    float amt = uStrength*0.16*uScale;
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 8; i++){
+      if (i >= uS) break;
+      float ior = uIOR + uDisp*uSpecO[i];
+      vec3 r = refract(vec3(0.0, 0.0, -1.0), n, 1.0/ior);
+      vec2 off = r.xy/max(-r.z, 0.2)*amt;
+      acc += vid(uv + off*vec2(1.0/gAsp, 1.0), lod)*uSpecW[i];
+    }
+    float fogA = uFrost*(1.0 - c.y);
+    float l = dot(acc, vec3(0.2126, 0.7152, 0.0722));
+    acc = mix(acc, vec3(l)*1.05 + 0.02, fogA*0.35);
+    float caus = 1.0 + clamp(-lap*0.0025*uStrength, -0.45, 1.6);
+    col = acc*caus*c.z;
+    vec3 rv = reflect(vec3(0.0, 0.0, -1.0), n);
+    col += uSunCol*pow(max(dot(rv, normalize(uLdir)), 0.0), 60.0)*0.6;
+    col += uHorizon*pow(1.0 - n.z, 2.0)*0.6;
+    if (uStruct == 6){
+      vec2 nrm = vec2(cos(0.35), sin(0.35));
+      float d = dot(q - gP, nrm);
+      float band = exp(-pow(d/0.12, 2.0));
+      float edgeB = exp(-pow((abs(d) - 0.9)/0.06, 2.0));
+      col += rainbow(clamp(d/0.24 + 0.5, 0.0, 1.0))*uSunCol*0.35*band*(0.4 + uDisp*12.0);
+      col += rainbow(fract(abs(d)*3.0 + uTime*0.02))*uSunCol*0.12*edgeB;
+      col += vid(vec2(1.0 - uv.x, uv.y), 3.0)*0.18*step(abs(d), 0.9);
+    }
+  }
+  col = uLift + col*uGain;
+  float lg = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col = mix(vec3(lg), col, uSat);
+  vec2 lp = (uv - uLeakPos)*vec2(gAsp, 1.0);
+  col += uSunCol*0.10*uLeak*exp(-dot(lp, lp)*2.2);
+  o = vec4(max(col, 0.0)*uEnc, 1.0);
+}`;
+
+const FS_DOWN = HEAD + `
+in vec2 vUv;
+out vec4 o;
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+uniform int uFirst;
+uniform float uThresh;
+uniform float uEnc;
+void main(){
+  vec2 h = uTexel;
+  vec3 s = texture(uSrc, vUv).rgb*4.0 + texture(uSrc, vUv - h).rgb + texture(uSrc, vUv + h).rgb
+         + texture(uSrc, vUv + vec2(h.x, -h.y)).rgb + texture(uSrc, vUv - vec2(h.x, -h.y)).rgb;
+  s *= 0.125;
+  if (uFirst == 1){
+    s /= uEnc;
+    float br = max(s.r, max(s.g, s.b));
+    float soft = clamp(br - uThresh + 0.5, 0.0, 1.0);
+    soft = soft*soft*0.5;
+    float c = max(soft, br - uThresh)/max(br, 1e-4);
+    s = min(s*c, vec3(60.0))*uEnc;
+  }
+  o = vec4(s, 1.0);
+}`;
+
+const FS_UP = HEAD + `
+in vec2 vUv;
+out vec4 o;
+uniform sampler2D uSrc;
+uniform vec2 uTexel;
+void main(){
+  vec2 h = uTexel;
+  vec3 s = texture(uSrc, vUv + vec2(-h.x*2.0, 0.0)).rgb + texture(uSrc, vUv + vec2(-h.x, h.y)).rgb*2.0
+         + texture(uSrc, vUv + vec2(0.0, h.y*2.0)).rgb + texture(uSrc, vUv + vec2(h.x, h.y)).rgb*2.0
+         + texture(uSrc, vUv + vec2(h.x*2.0, 0.0)).rgb + texture(uSrc, vUv + vec2(h.x, -h.y)).rgb*2.0
+         + texture(uSrc, vUv + vec2(0.0, -h.y*2.0)).rgb + texture(uSrc, vUv + vec2(-h.x, -h.y)).rgb*2.0;
+  o = vec4(s/12.0, 1.0);
+}`;
+
+const FS_COMPOSITE = HEAD + `
+in vec2 vUv;
+out vec4 o;
+uniform sampler2D uHdr;
+uniform sampler2D uBloom;
+uniform float uExposure;
+uniform float uBloomK;
+uniform float uGrain;
+uniform float uEnc;
+uniform float uTime;
+uniform int uTM;
+uniform vec2 uRes;
+vec3 aces(vec3 x){ return clamp((x*(2.51*x + 0.03))/(x*(2.43*x + 0.59) + 0.14), 0.0, 1.0); }
+vec3 softClip(vec3 x){
+  vec3 k = 0.78 + 0.22*(1.0 - exp(-(x - 0.78)/0.22));
+  return mix(x, k, step(0.78, x));
+}
+float hash(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y)*p3.z); }
+void main(){
+  vec3 c = texture(uHdr, vUv).rgb/uEnc;
+  vec3 b = texture(uBloom, vUv).rgb/uEnc;
+  c = (c + b*uBloomK)*uExposure;
+  vec2 v = (vUv - 0.5)*vec2(uRes.x/uRes.y, 1.0);
+  c *= mix(1.0, smoothstep(1.35, 0.2, length(v)), 0.55);
+  c = uTM == 0 ? aces(c) : softClip(c);
+  c = pow(c, vec3(1.0/2.2));
+  float n = hash(gl_FragCoord.xy + fract(uTime*7.13)*917.0) + hash(gl_FragCoord.xy*1.37 + fract(uTime*3.1)*401.0) - 1.0;
+  c += n*uGrain*0.045;
+  o = vec4(c, 1.0);
+}`;
+
+/* ================================================================
+   GL helpers
+   ================================================================ */
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(s);
+    console.error(log + '\n' + src.split('\n').map((l, i) => (i + 1) + ': ' + l).join('\n'));
+    throw new Error(log);
+  }
+  return s;
+}
+function program(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  p.L = {};
+  return p;
+}
+const SRC = {
+  glass: [VS_FULL, FS_GLASS], water: [VS_FULL, FS_WATER], filter: [VS_FULL, FS_FILTER],
+  phGlass: [VS_PH_GLASS, FS_PHOTON], phWater: [VS_PH_WATER, FS_PHOTON],
+  fill: [VS_FULL, HEAD + 'out vec4 o; void main(){ o = vec4(0.0); }'],
+  down: [VS_FULL, FS_DOWN], up: [VS_FULL, FS_UP], comp: [VS_FULL, FS_COMPOSITE]
+};
+const PROGS = {};
+function P(name) {
+  if (!PROGS[name]) {
+    try { PROGS[name] = program(SRC[name][0], SRC[name][1]); }
+    catch (e) { fail('Ein Shader konnte nicht kompiliert werden.', String(e.message || e)); throw e; }
+  }
+  return PROGS[name];
+}
+function U(p, n) { let l = p.L[n]; if (l === undefined) { l = gl.getUniformLocation(p, n); p.L[n] = l; } return l; }
+const u1f = (p, n, v) => gl.uniform1f(U(p, n), v);
+const u1i = (p, n, v) => gl.uniform1i(U(p, n), v);
+const u2f = (p, n, a, b) => gl.uniform2f(U(p, n), a, b);
+const u3v = (p, n, v) => gl.uniform3fv(U(p, n), v);
+
+let FMT = { i: gl.RGBA16F, f: gl.RGBA, t: gl.HALF_FLOAT }, ENC = 1, CAU_ENC = 1;
+function makeTarget(w, h, fmt) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, fmt.i, w, h, 0, fmt.f, fmt.t, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { tex, fbo, w, h, ok };
+}
+function freeTarget(t) { if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); } }
+{
+  const t = makeTarget(4, 4, FMT);
+  if (!t.ok) { FMT = { i: gl.RGBA8, f: gl.RGBA, t: gl.UNSIGNED_BYTE }; ENC = 0.25; CAU_ENC = 1 / 6; }
+  freeTarget(t);
+}
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+gl.disable(gl.DEPTH_TEST);
+
+/* ================================================================
+   State
+   ================================================================ */
+const coarse = matchMedia('(pointer: coarse)').matches;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const S = {
+  mode: 'anim',
+  shape: 1, floor: 0, spin: !reduced,
+  wave: 2, waveAmp: 1, waveSpeed: 1, depth: 1.4,
+  hour: 19.4, timeRun: false, beam: false, clouds: 0.35, exposure: 0, bloom: 0.7,
+  mat: 2, ior: 1.62, disp: 0.017, tint: 0,
+  struct: 0, strength: 1, scale: 1, frost: 0.25,
+  quality: 1, grain: 0.35
+};
+const MATS = [
+  { name: 'Wasser', ior: 1.333, disp: 0.006 },
+  { name: 'Kronglas', ior: 1.517, disp: 0.008 },
+  { name: 'Flintglas', ior: 1.620, disp: 0.017 },
+  { name: 'Saphir', ior: 1.770, disp: 0.011 },
+  { name: 'Diamant', ior: 2.417, disp: 0.044 },
+  { name: 'Fantasie', ior: 1.700, disp: 0.090 }
+];
+const TINTS = [
+  { name: 'Klar', a: [0.015, 0.01, 0.012] },
+  { name: 'Aqua', a: [0.45, 0.075, 0.055] },
+  { name: 'Smaragd', a: [0.85, 0.11, 0.55] },
+  { name: 'Bernstein', a: [0.06, 0.3, 1.1] },
+  { name: 'Rosé', a: [0.07, 0.55, 0.28] },
+  { name: 'Kobalt', a: [1.1, 0.7, 0.06] }
+];
+const QUAL = [
+  { name: 'Schnell', scale: 0.5, S: 3, gN: 200, wN: [300, 240], cau: 512 },
+  { name: 'Ausgewogen', scale: 0.75, S: 4, gN: 300, wN: [460, 368], cau: 1024 },
+  { name: 'Maximal', scale: 1.0, S: 6, gN: 420, wN: [640, 512], cau: 1024 }
+];
+const BEAM_W = 0.07;
+const WAVE_BOUND = [0.012, 0.23, 0.2, 0.06, 1.1, 0.09];
+const deg = Math.PI / 180;
+
+function rotX(a) { const c = Math.cos(a), s = Math.sin(a); return [1, 0, 0, 0, c, -s, 0, s, c]; }
+function rotY(a) { const c = Math.cos(a), s = Math.sin(a); return [c, 0, s, 0, 1, 0, -s, 0, c]; }
+function rotZ(a) { const c = Math.cos(a), s = Math.sin(a); return [c, -s, 0, s, c, 0, 0, 0, 1]; }
+function mul3(a, b) {
+  const r = new Array(9);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++)
+    r[i * 3 + j] = a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j];
+  return r;
+}
+const I3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+const SHAPES = [
+  null,
+  { name: 'Glaskugel', pos: [0, 1.0, 0], R: 1.05, tilt: I3, step: 0.95, mat: 1 },
+  { name: 'Prisma', pos: [0, 1.4, 0], R: 1.48, tilt: I3, step: 0.9, mat: 5, aim: true },
+  { name: 'Linse', pos: [0, 1.0, 0], R: 1.0, tilt: I3, step: 0.9, mat: 1 },
+  { name: 'Diamant', pos: [0, 1.45, 0], R: 1.36, tilt: rotX(0.22), step: 0.7, mat: 4 },
+  { name: 'Glasring', pos: [0, 1.25, 0], R: 1.16, tilt: rotX(1.0), step: 0.95, mat: 2 },
+  { name: 'Würfel', pos: [0, 1.15, 0], R: 1.1, tilt: mul3(rotX(-0.6155), rotZ(Math.PI / 4)), step: 0.9, mat: 2 },
+  { name: 'Skulptur', pos: [0, 1.22, 0], R: 1.3, tilt: I3, step: 0.7, mat: 5 }
+];
+
+const cam = { yaw: -0.85, pitch: 15 * deg, dist: 5.4, fov: 42 * deg };
+const CAM_DEFAULT = { glass: { pitch: 15 * deg, dist: 5.4 }, water: { pitch: 17 * deg, dist: 7.5 } };
+let spinA = 0.6, time = 0, lastT = performance.now(), seed = 3.1;
+let ripples = [];
+let camPt = [0.5, 0.52];
+let dynScale = 1;
+
+/* ================================================================
+   Time of day → light
+   ================================================================ */
+const KF = [
+  { e: -20, zen: [0.002, 0.003, 0.008], hor: [0.006, 0.008, 0.016], sun: [0.04, 0.055, 0.1], exp: 5.0, halo: 0.2, night: 1, disk: 50, fog: 0.0060 },
+  { e: -10, zen: [0.008, 0.012, 0.035], hor: [0.03, 0.035, 0.08], sun: [0.04, 0.055, 0.1], exp: 4.0, halo: 0.2, night: 0.6, disk: 50, fog: 0.0060 },
+  { e: -5, zen: [0.025, 0.04, 0.12], hor: [0.16, 0.12, 0.2], sun: [0.04, 0.05, 0.085], exp: 2.8, halo: 0.3, night: 0.12, disk: 40, fog: 0.0060 },
+  { e: -1.5, zen: [0.05, 0.07, 0.2], hor: [0.55, 0.24, 0.2], sun: [0.5, 0.11, 0.04], exp: 1.9, halo: 0.7, night: 0, disk: 30, fog: 0.0055 },
+  { e: 1.5, zen: [0.08, 0.13, 0.32], hor: [1.0, 0.42, 0.16], sun: [2.6, 0.7, 0.16], exp: 1.15, halo: 0.8, night: 0, disk: 26, fog: 0.0045 },
+  { e: 6, zen: [0.09, 0.17, 0.40], hor: [0.95, 0.55, 0.28], sun: [4.0, 1.8, 0.7], exp: 0.88, halo: 0.65, night: 0, disk: 26, fog: 0.0035 },
+  { e: 14, zen: [0.10, 0.22, 0.52], hor: [0.75, 0.66, 0.56], sun: [4.2, 2.9, 1.8], exp: 0.78, halo: 0.5, night: 0, disk: 26, fog: 0.0030 },
+  { e: 30, zen: [0.09, 0.24, 0.62], hor: [0.58, 0.70, 0.84], sun: [4.0, 3.5, 2.9], exp: 0.62, halo: 0.35, night: 0, disk: 26, fog: 0.0025 },
+  { e: 60, zen: [0.07, 0.22, 0.64], hor: [0.54, 0.68, 0.86], sun: [4.0, 3.8, 3.4], exp: 0.58, halo: 0.28, night: 0, disk: 26, fog: 0.0020 }
+];
+const Lt = {};
+function sunElev(h) {
+  if (h >= 6 && h <= 20) return 58 * Math.sin(Math.PI * (h - 6) / 14);
+  return h < 6 ? -(6 - h) * 11 : -(h - 20) * 11;
+}
+function computeLight() {
+  const h = S.hour;
+  const e = sunElev(h);
+  let i = 0;
+  while (i < KF.length - 2 && e > KF[i + 1].e) i++;
+  const a = KF[i], b = KF[i + 1];
+  const t = clamp((e - a.e) / (b.e - a.e), 0, 1);
+  let zen = lerp3(a.zen, b.zen, t), hor = lerp3(a.hor, b.hor, t), sun = lerp3(a.sun, b.sun, t);
+  let fog = lerp(a.fog, b.fog, t);
+  const morning = h < 13;
+  if (morning) {
+    const w = clamp(1 - (e + 4) / 22, 0, 1);
+    hor = [hor[0] * lerp(1, 0.9, w), hor[1] * lerp(1, 0.86, w), hor[2] * lerp(1, 1.3, w)];
+    sun = [sun[0] * lerp(1, 0.94, w), sun[1] * lerp(1, 1.04, w), sun[2] * lerp(1, 1.22, w)];
+    fog *= lerp(1, 2.6, w);
+  }
+  let dir;
+  if (e > -4.5) {
+    const el = Math.max(e, 0.7) * deg;
+    const phi = clamp((h - 13) / 7, -1.15, 1.15) * 1.35;
+    dir = [Math.cos(el) * Math.sin(phi), Math.sin(el), -Math.cos(el) * Math.cos(phi)];
+  } else {
+    const el = 24 * deg, phi = 0.5;
+    dir = [Math.cos(el) * Math.sin(phi), Math.sin(el), -Math.cos(el) * Math.cos(phi)];
+  }
+  Object.assign(Lt, {
+    e, dir, zen, hor, sun, fog,
+    exp: lerp(a.exp, b.exp, t), halo: lerp(a.halo, b.halo, t),
+    night: lerp(a.night, b.night, t), disk: lerp(a.disk, b.disk, t)
+  });
+  // grading for camera mode
+  const sl = Math.max(lum(sun), 1e-4);
+  const sn = sun.map(v => v / sl);
+  const day = clamp((e + 6) / 12, 0, 1);
+  const sday = day * day * (3 - 2 * day);
+  const warm = [lerp(1, sn[0], 0.32), lerp(1, sn[1], 0.32), lerp(1, sn[2], 0.32)];
+  const nightTint = [0.5, 0.64, 1.08];
+  const bright = lerp(0.42, 1.0, sday);
+  Lt.gain = lerp3(nightTint, warm, sday).map(v => v * bright);
+  Lt.lift = lerp3(zen.map(v => v * 0.35), zen.map(v => v * 0.05), sday);
+  Lt.sat = lerp(0.62, 1.06, sday) + 0.08 * clamp(1 - Math.abs(e - 4) / 8, 0, 1);
+  Lt.leak = clamp(Lt.halo - 0.4, 0, 1) * 1.2;
+  const phi = clamp((h - 13) / 7, -1.15, 1.15) * 1.35;
+  Lt.leakPos = [0.5 + Math.sin(phi) * 0.62, 0.88];
+  Lt.ldir = [Math.sin(phi) * 0.7, 0.45, 0.55];
+}
+
+function spectral(n) {
+  const W = [], O = [], sum = [0, 0, 0];
+  for (let i = 0; i < n; i++) {
+    const x = n === 1 ? 0.5 : i / (n - 1);
+    const l = 650 - x * 210;
+    let r = 0, g = 0, b = 0;
+    if (l < 440) { r = -(l - 440) / 60; b = 1; }
+    else if (l < 490) { g = (l - 440) / 50; b = 1; }
+    else if (l < 510) { g = 1; b = -(l - 510) / 20; }
+    else if (l < 580) { r = (l - 510) / 70; g = 1; }
+    else if (l < 645) { r = 1; g = -(l - 645) / 65; }
+    else r = 1;
+    W.push([r, g, b]); sum[0] += r; sum[1] += g; sum[2] += b;
+    O.push((1 / (l * l) - 1 / (589.3 * 589.3)) / (1 / (486.1 * 486.1) - 1 / (656.3 * 656.3)));
+  }
+  const w = new Float32Array(24), o = new Float32Array(8);
+  for (let i = 0; i < n; i++) {
+    w[i * 3] = W[i][0] / sum[0]; w[i * 3 + 1] = W[i][1] / sum[1]; w[i * 3 + 2] = W[i][2] / sum[2];
+    o[i] = O[i];
+  }
+  return { n, w, o };
+}
+const SPEC = {};
+function spec(n) { return SPEC[n] || (SPEC[n] = spectral(n)); }
+
+/* ================================================================
+   Targets & resizing
+   ================================================================ */
+let hdr = null, blooms = [], cauT = null, cauSize = 0;
+let W = 0, H = 0, RW = 0, RH = 0;
+function resize(force) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.round(innerWidth * dpr)), h = Math.max(1, Math.round(innerHeight * dpr));
+  const sc = QUAL[S.quality].scale * dynScale;
+  const rw = Math.max(64, Math.round(w * sc)), rh = Math.max(64, Math.round(h * sc));
+  if (!force && w === W && h === H && rw === RW && rh === RH) return;
+  W = w; H = h; RW = rw; RH = rh;
+  canvas.width = W; canvas.height = H;
+  freeTarget(hdr); blooms.forEach(freeTarget); blooms = [];
+  hdr = makeTarget(RW, RH, FMT);
+  let bw = RW, bh = RH;
+  for (let i = 0; i < 5; i++) {
+    bw = Math.max(2, bw >> 1); bh = Math.max(2, bh >> 1);
+    blooms.push(makeTarget(bw, bh, FMT));
+  }
+}
+function ensureCaustic() {
+  const n = QUAL[S.quality].cau;
+  if (cauT && cauSize === n) return;
+  freeTarget(cauT);
+  cauT = makeTarget(n, n, FMT);
+  cauSize = n;
+}
+
+/* ================================================================
+   Uniform upload
+   ================================================================ */
+const ripArr = new Float32Array(32);
+function setCommon(p) {
+  u1f(p, 'uTime', time);
+  u3v(p, 'uSunDir', Lt.dir);
+  u3v(p, 'uSunCol', Lt.sun);
+  u3v(p, 'uZenith', Lt.zen);
+  u3v(p, 'uHorizon', Lt.hor);
+  u1f(p, 'uNight', Lt.night);
+  u1f(p, 'uDiskK', Lt.disk);
+  u1f(p, 'uHalo', Lt.halo);
+  u1f(p, 'uCloud', S.clouds);
+  u1f(p, 'uSeed', seed);
+  u1f(p, 'uBeam', S.beam && S.mode === 'anim' && S.shape > 0 ? 1 : 0);
+  u1f(p, 'uBeamW', BEAM_W);
+  u1i(p, 'uWave', S.wave);
+  u1f(p, 'uWaveAmp', S.waveAmp);
+  u1f(p, 'uWaveSpeed', S.waveSpeed);
+  ripArr.fill(0);
+  ripples.forEach((r, i) => { ripArr.set([r.x, r.z, r.t0, r.amp], i * 4); });
+  gl.uniform4fv(U(p, 'uRip'), ripArr);
+}
+function setSpec(p, n) {
+  const sp = spec(n);
+  u1i(p, 'uS', sp.n);
+  gl.uniform3fv(U(p, 'uSpecW'), sp.w);
+  gl.uniform1fv(U(p, 'uSpecO'), sp.o);
+  u1f(p, 'uIOR', S.ior);
+  u1f(p, 'uDisp', S.disp);
+}
+function camBasis(target) {
+  const cp = Math.cos(cam.pitch);
+  const pos = [target[0] + Math.sin(cam.yaw) * cp * cam.dist, target[1] + Math.sin(cam.pitch) * cam.dist, target[2] + Math.cos(cam.yaw) * cp * cam.dist];
+  const f = norm3([target[0] - pos[0], target[1] - pos[1], target[2] - pos[2]]);
+  const r = norm3(cross(f, [0, 1, 0]));
+  const u = cross(r, f);
+  return { pos, f, r, u, rot: new Float32Array([r[0], r[1], r[2], u[0], u[1], u[2], -f[0], -f[1], -f[2]]) };
+}
+function setCam(p, cb) {
+  u3v(p, 'uCamPos', cb.pos);
+  gl.uniformMatrix3fv(U(p, 'uCamRot'), false, cb.rot);
+  u1f(p, 'uFovK', fovK());
+  u2f(p, 'uRes', RW, RH);
+  u1f(p, 'uFog', Lt.fog);
+  u1f(p, 'uEnc', ENC);
+}
+function fovK() {
+  const asp = innerWidth / innerHeight;
+  return 2 * Math.tan(cam.fov / 2) * Math.max(1, Math.pow(1 / asp, 0.75));
+}
+function setCaustic(p, reg) {
+  u2f(p, 'uCauC', reg.C[0], reg.C[1]);
+  u2f(p, 'uCauU', reg.U[0], reg.U[1]);
+  u2f(p, 'uCauH', reg.H[0], reg.H[1]);
+}
+function drawTri() { gl.drawArrays(gl.TRIANGLES, 0, 3); }
+function bindTarget(t) { gl.bindFramebuffer(gl.FRAMEBUFFER, t ? t.fbo : null); gl.viewport(0, 0, t ? t.w : W, t ? t.h : H); }
+function jsRefract(I, N, eta) {
+  const d = dot3(N, I), k = 1 - eta * eta * (1 - d * d);
+  if (k < 0) return [0, 0, 0];
+  const a = eta * d + Math.sqrt(k);
+  return [eta * I[0] - a * N[0], eta * I[1] - a * N[1], eta * I[2] - a * N[2]];
+}
+function fadeCaustic(key, k) {
+  bindTarget(cauT);
+  if (cauT.key !== key) {
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    cauT.key = key;
+    return 1;
+  }
+  gl.useProgram(P('fill'));
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ZERO, gl.CONSTANT_COLOR);
+  gl.blendColor(k, k, k, k);
+  drawTri();
+  gl.disable(gl.BLEND);
+  return 1 - k;
+}
+function sunUsable() { return Lt.dir[1] > 0.012 && lum(Lt.sun) > 0.004; }
+
+/* ================================================================
+   Render passes
+   ================================================================ */
+function renderGlass() {
+  const sh = SHAPES[S.shape], q = QUAL[S.quality];
+  ensureCaustic();
+  const L = Lt.dir;
+  let R;
+  if (sh.aim) {
+    // align the prism axis perpendicular to the light and roll it towards minimum deviation
+    const yaw = Math.atan2(-L[2], L[0]) + (S.spin ? 0.38 * Math.sin(spinA * 1.6) : 0);
+    const roll = Math.asin(clamp(L[1], -1, 1)) + 25 * deg;
+    R = mul3(rotY(yaw), rotZ(roll));
+  } else R = mul3(rotY(spinA), sh.tilt);
+  const cosE = Math.hypot(L[0], L[2]);
+  const tanE = L[1] / Math.max(cosE, 1e-3);
+  const Ud = [-L[0] / cosE, -L[2] / cosE];
+  const a0 = -(sh.R + 0.8);
+  const a1 = Math.min((sh.pos[1] + sh.R) / Math.max(tanE, 0.02) + sh.R + 0.8, 28);
+  const reg = {
+    C: [sh.pos[0] + Ud[0] * (a0 + a1) / 2, sh.pos[2] + Ud[1] * (a0 + a1) / 2],
+    U: Ud, H: [(a1 - a0) / 2, sh.R * 1.7 + 0.6]
+  };
+  const setObj = p => {
+    u1i(p, 'uShape', S.shape);
+    gl.uniformMatrix3fv(U(p, 'uObjRot'), false, new Float32Array(R));
+    u3v(p, 'uObjPos', sh.pos);
+    u1f(p, 'uObjR', sh.R);
+    u1f(p, 'uStepK', sh.step);
+    u3v(p, 'uAbsorb', TINTS[S.tint].a);
+  };
+  const keep = fadeCaustic('g' + S.shape + '/' + S.quality + '/' + S.beam, 0.8);
+  if (sunUsable()) {
+    const p = P('phGlass');
+    gl.useProgram(p);
+    const nS = S.beam ? 8 : q.S;
+    setCommon(p); setSpec(p, nS); setObj(p); setCaustic(p, reg);
+    const N = q.gN;
+    const tU = 2 * reg.H[0] / cauT.w, tV = 2 * reg.H[1] / cauT.h;
+    const sp1 = 2 * sh.R / N * (S.beam ? 0.75 : 1), sp2 = 2 * sh.R / N * (S.beam ? BEAM_W : 1);
+    const ps = clamp(Math.ceil(Math.max(sp2 / Math.max(L[1], 0.05) / tU, sp1 / tV) * 1.4), 2, 8);
+    gl.uniform2i(U(p, 'uGrid'), N, N);
+    u1f(p, 'uPt', ps);
+    u1f(p, 'uEnergy', (sp1 * sp2) / (tU * tV) / (ps * ps) * CAU_ENC * keep);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.drawArrays(gl.POINTS, 0, N * N * nS);
+    gl.disable(gl.BLEND);
+  }
+  const p = P('glass');
+  gl.useProgram(p);
+  bindTarget(hdr);
+  setCommon(p); setSpec(p, q.S); setObj(p); setCaustic(p, reg);
+  setCam(p, camBasis([0, 0.85, 0]));
+  u1i(p, 'uFloor', S.floor);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, cauT.tex);
+  u1i(p, 'uCau', 0);
+  u2f(p, 'uCauTex', cauT.w, cauT.h);
+  u1f(p, 'uCauK', 1 / CAU_ENC);
+  drawTri();
+}
+
+function renderWater() {
+  const q = QUAL[S.quality];
+  ensureCaustic();
+  const target = [0, 0, 0];
+  const cb = camBasis(target);
+  const fw = norm3([cb.f[0], 0, cb.f[2]]);
+  const reg = { C: [target[0] + fw[0] * 4, target[2] + fw[2] * 4], U: [fw[0], fw[2]], H: [10, 8] };
+  const rs = jsRefract([-Lt.dir[0], -Lt.dir[1], -Lt.dir[2]], [0, 1, 0], 1 / S.ior);
+  const k = rs[1] < -0.05 ? S.depth / -rs[1] : 0;
+  const surfC = [reg.C[0] - rs[0] * k, reg.C[1] - rs[2] * k];
+  const nS = Math.min(q.S, 3);
+  const keep = fadeCaustic('w' + S.quality, 0.6);
+  if (sunUsable()) {
+    const p = P('phWater');
+    gl.useProgram(p);
+    setCommon(p); setSpec(p, nS); setCaustic(p, reg);
+    u3v(p, 'uAbsorb', TINTS[S.tint].a);
+    u1f(p, 'uDepth', S.depth);
+    u2f(p, 'uSurfC', surfC[0], surfC[1]);
+    const [Nu, Nv] = q.wN;
+    const tU = 2 * reg.H[0] / cauT.w, tV = 2 * reg.H[1] / cauT.h;
+    const sU = 2 * reg.H[0] * 1.08 / Nu, sV = 2 * reg.H[1] * 1.08 / Nv;
+    const ps = clamp(Math.ceil(Math.max(sU / tU, sV / tV) * 1.25), 2, 8);
+    gl.uniform2i(U(p, 'uGrid'), Nu, Nv);
+    u1f(p, 'uPt', ps);
+    u1f(p, 'uEnergy', (sU * sV * Math.max(Lt.dir[1], 0)) / (tU * tV) / (ps * ps) * CAU_ENC * keep);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.drawArrays(gl.POINTS, 0, Nu * Nv * nS);
+    gl.disable(gl.BLEND);
+  }
+  const p = P('water');
+  gl.useProgram(p);
+  bindTarget(hdr);
+  setCommon(p); setSpec(p, nS); setCaustic(p, reg);
+  setCam(p, cb);
+  u1i(p, 'uFloor', S.floor);
+  u3v(p, 'uAbsorb', TINTS[S.tint].a);
+  u1f(p, 'uDepth', S.depth);
+  u1f(p, 'uWaveBound', (WAVE_BOUND[S.wave] + 0.08) * S.waveAmp + 0.01);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, cauT.tex);
+  u1i(p, 'uCau', 0);
+  u2f(p, 'uCauTex', cauT.w, cauT.h);
+  u1f(p, 'uCauK', 1 / CAU_ENC);
+  drawTri();
+}
+
+/* ---------- camera / image source ---------- */
+const video = $('#vid');
+const vidTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, vidTex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([40, 40, 48, 255]));
+const src = { kind: 'none', w: 1, h: 1, mirror: false, dirty: false, el: null };
+let stream = null, facing = 'environment';
+
+function uploadSource(el, w, h) {
+  gl.bindTexture(gl.TEXTURE_2D, vidTex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, el);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  src.w = w; src.h = h;
+}
+function setStill(el, w, h) {
+  stopCam();
+  src.kind = 'still'; src.el = el; src.mirror = false;
+  uploadSource(el, w, h);
+}
+function sampleImage() {
+  const c = document.createElement('canvas');
+  const w = 1280, h = 1600;
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const hz = h * 0.58;
+  let gr = g.createLinearGradient(0, 0, 0, hz);
+  gr.addColorStop(0, '#16224d'); gr.addColorStop(0.45, '#6a4a7d'); gr.addColorStop(0.78, '#e2795a'); gr.addColorStop(1, '#ffd38c');
+  g.fillStyle = gr; g.fillRect(0, 0, w, hz);
+  const sx = w * 0.6, sy = hz - 70;
+  gr = g.createRadialGradient(sx, sy, 0, sx, sy, 420);
+  gr.addColorStop(0, 'rgba(255,240,200,1)'); gr.addColorStop(0.1, 'rgba(255,214,150,.9)'); gr.addColorStop(0.35, 'rgba(255,150,90,.25)'); gr.addColorStop(1, 'rgba(255,120,80,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, w, hz);
+  g.fillStyle = '#fff4dc'; g.beginPath(); g.arc(sx, sy, 46, 0, Math.PI * 2); g.fill();
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  [['#7a4f73', 0.86, 90], ['#4b2f55', 0.93, 150], ['#241830', 1.0, 210]].forEach(([col, yk, amp]) => {
+    g.fillStyle = col; g.beginPath(); g.moveTo(0, hz);
+    let y = hz * yk - amp * 0.4;
+    for (let x = 0; x <= w; x += 16) { y += (rnd() - 0.5) * amp * 0.25; y = clamp(y, hz - amp, hz - 10); g.lineTo(x, y); }
+    g.lineTo(w, hz); g.closePath(); g.fill();
+  });
+  gr = g.createLinearGradient(0, hz, 0, h);
+  gr.addColorStop(0, '#5a3d5f'); gr.addColorStop(0.3, '#2a2140'); gr.addColorStop(1, '#0c0b16');
+  g.fillStyle = gr; g.fillRect(0, hz, w, h - hz);
+  for (let i = 0; i < 260; i++) {
+    const y = hz + Math.pow(rnd(), 1.6) * (h - hz) * 0.8;
+    const spread = 30 + (y - hz) * 0.5;
+    const x = sx + (rnd() - 0.5) * spread;
+    const len = 10 + rnd() * 60 * (1 + (y - hz) / 300);
+    g.fillStyle = `rgba(255,${190 + rnd() * 50 | 0},${110 + rnd() * 60 | 0},${0.25 + rnd() * 0.6})`;
+    g.fillRect(x - len / 2, y, len, 2 + rnd() * 3);
+  }
+  const cols = ['#ffcf6b', '#ff7a6b', '#7ad0ff', '#c38bff', '#8bffb4', '#ffe9a8'];
+  for (let i = 0; i < 70; i++) {
+    const x = rnd() * w, y = hz + 10 + rnd() * 40, r = 6 + rnd() * 26;
+    const cg = g.createRadialGradient(x, y, 0, x, y, r);
+    const cc = cols[i % cols.length];
+    cg.addColorStop(0, cc); cg.addColorStop(0.6, cc + '99'); cg.addColorStop(1, cc + '00');
+    g.fillStyle = cg; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
+  g.fillStyle = '#07060b';
+  g.fillRect(0, h * 0.8, w, h * 0.2);
+  for (let i = 0; i < 9; i++) { const x = 60 + i * 150; g.fillRect(x, h * 0.66, 14, h * 0.2); g.fillRect(x - 30, h * 0.66, 74, 10); }
+  g.fillRect(0, h * 0.8 - 26, w, 12);
+  g.fillRect(0, h * 0.8 - 90, w, 8);
+  for (let i = 0; i < 9; i++) {
+    const x = 67 + i * 150, y = h * 0.66;
+    const lg = g.createRadialGradient(x, y, 0, x, y, 70);
+    lg.addColorStop(0, 'rgba(255,220,160,.95)'); lg.addColorStop(0.2, 'rgba(255,190,120,.45)'); lg.addColorStop(1, 'rgba(255,170,100,0)');
+    g.fillStyle = lg; g.beginPath(); g.arc(x, y, 70, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#07060b';
+  }
+  return c;
+}
+async function startCam() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    useSample('Keine Kamera verfügbar. Das Beispielbild ist aktiv, eigene Bilder lädst du über das Bild-Symbol.');
+    return;
+  }
+  try {
+    stopCam();
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    src.kind = 'video'; src.mirror = facing === 'user';
+  } catch (err) {
+    const https = location.protocol === 'https:' || location.hostname === 'localhost';
+    useSample(https
+      ? 'Kamera-Zugriff wurde nicht erlaubt. Das Beispielbild ist aktiv. Erlaube den Zugriff in den Browser-Einstellungen und tippe erneut auf „Kamera“.'
+      : 'Die Kamera funktioniert nur über HTTPS. Das Beispielbild ist aktiv.');
+  }
+}
+function stopCam() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  video.srcObject = null;
+  if (src.kind === 'video') src.kind = 'none';
+}
+let sampleCanvas = null;
+function useSample(msg) {
+  if (!sampleCanvas) sampleCanvas = sampleImage();
+  setStill(sampleCanvas, sampleCanvas.width, sampleCanvas.height);
+  if (msg) toast(msg, 5200);
+}
+function renderFilter() {
+  if (src.kind === 'video' && video.readyState >= 2 && video.videoWidth > 0) {
+    uploadSource(video, video.videoWidth, video.videoHeight);
+  }
+  const q = QUAL[S.quality];
+  const p = P('filter');
+  gl.useProgram(p);
+  bindTarget(hdr);
+  setCommon(p); setSpec(p, Math.max(q.S, 4));
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, vidTex);
+  u1i(p, 'uVid', 0);
+  u2f(p, 'uVidSize', src.w, src.h);
+  u1f(p, 'uMirror', src.mirror ? 1 : 0);
+  u1i(p, 'uStruct', S.struct);
+  u1f(p, 'uStrength', S.strength);
+  u1f(p, 'uScale', S.scale);
+  u1f(p, 'uFrost', S.frost);
+  u2f(p, 'uPt', camPt[0], camPt[1]);
+  u2f(p, 'uRes', RW, RH);
+  u3v(p, 'uGain', Lt.gain);
+  u3v(p, 'uLift', Lt.lift);
+  u1f(p, 'uSat', Lt.sat);
+  u3v(p, 'uLdir', Lt.ldir);
+  u2f(p, 'uLeakPos', Lt.leakPos[0], Lt.leakPos[1]);
+  u1f(p, 'uLeak', Lt.leak);
+  u1f(p, 'uEnc', ENC);
+  drawTri();
+}
+
+function bloomPass() {
+  let p = P('down');
+  gl.useProgram(p);
+  let srcT = hdr;
+  u1f(p, 'uThresh', S.mode === 'anim' ? 1.0 : 0.85);
+  u1f(p, 'uEnc', ENC);
+  u1i(p, 'uSrc', 0);
+  gl.activeTexture(gl.TEXTURE0);
+  for (let i = 0; i < blooms.length; i++) {
+    bindTarget(blooms[i]);
+    gl.bindTexture(gl.TEXTURE_2D, srcT.tex);
+    u2f(p, 'uTexel', 1 / srcT.w, 1 / srcT.h);
+    u1i(p, 'uFirst', i === 0 ? 1 : 0);
+    drawTri();
+    srcT = blooms[i];
+  }
+  p = P('up');
+  gl.useProgram(p);
+  u1i(p, 'uSrc', 0);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  for (let i = blooms.length - 1; i > 0; i--) {
+    bindTarget(blooms[i - 1]);
+    gl.bindTexture(gl.TEXTURE_2D, blooms[i].tex);
+    u2f(p, 'uTexel', 0.5 / blooms[i].w, 0.5 / blooms[i].h);
+    drawTri();
+  }
+  gl.disable(gl.BLEND);
+}
+function composite() {
+  const p = P('comp');
+  gl.useProgram(p);
+  bindTarget(null);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, hdr.tex);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, blooms[0].tex);
+  u1i(p, 'uHdr', 0); u1i(p, 'uBloom', 1);
+  const anim = S.mode === 'anim';
+  const beamOn = anim && S.beam && S.shape > 0;
+  u1f(p, 'uExposure', (anim ? Lt.exp : 1) * Math.pow(2, S.exposure) * (beamOn ? 1.6 : 1));
+  u1f(p, 'uBloomK', S.bloom * (anim ? 0.22 : 0.3));
+  u1f(p, 'uGrain', S.grain);
+  u1f(p, 'uEnc', ENC);
+  u1f(p, 'uTime', time);
+  u1i(p, 'uTM', anim ? 0 : 1);
+  u2f(p, 'uRes', W, H);
+  drawTri();
+  gl.activeTexture(gl.TEXTURE0);
+}
+
+/* ================================================================
+   Loop
+   ================================================================ */
+let ema = 16, slowFor = 0, pendingCapture = false;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min((now - lastT) / 1000, 0.1);
+  lastT = now;
+  time += dt;
+  seed = Math.random() * 97;
+  if (S.spin && S.mode === 'anim' && S.shape > 0) spinA += dt * 0.22;
+  if (S.timeRun) {
+    S.hour += dt * 0.3;
+    if (S.hour > 22.5) S.hour = 4.0;
+    syncTime();
+  }
+  ripples = ripples.filter(r => time - r.t0 < 9);
+  ema = lerp(ema, dt * 1000, 0.05);
+  if (ema > 48 && dynScale > 0.62 && time > 2.5 && !window.__noAdapt) { slowFor += dt; if (slowFor > 1.5) { dynScale *= 0.85; slowFor = 0; } }
+  else slowFor = 0;
+  resize(false);
+  computeLight();
+  try {
+    if (S.mode === 'anim') { if (S.shape === 0) renderWater(); else renderGlass(); }
+    else renderFilter();
+    bloomPass();
+    composite();
+  } catch (e) { console.error(e); return; }
+  if (pendingCapture) {
+    pendingCapture = false;
+    canvas.toBlob(showPhoto, 'image/jpeg', 0.93);
+  }
+}
+
+/* ================================================================
+   UI
+   ================================================================ */
+const fmtHour = h => { const m = Math.round(h * 60); return String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+const abbe = () => S.disp > 0.0005 ? Math.round((S.ior - 1) / S.disp) : '∞';
+const PANES = [
+  { id: 'scene', label: 'Szene', show: () => S.mode === 'anim', items: [
+    { type: 'chips', key: 'shape', label: 'Objekt', options: [['Wasser', 0], ['Glaskugel', 1], ['Prisma', 2], ['Linse', 3], ['Diamant', 4], ['Glasring', 5], ['Würfel', 6], ['Skulptur', 7]], onChange: setShape },
+    { type: 'chips', key: 'floor', label: 'Untergrund', options: [['Stein', 0], ['Holz', 1], ['Schach', 2], ['Fliesen', 3], ['Sand', 4]] },
+    { type: 'toggle', key: 'spin', label: 'Objekt dreht sich', show: () => S.shape > 0 },
+    { type: 'note', text: () => S.shape === 0 ? 'Ziehen dreht die Kamera, Pinch oder Mausrad zoomt. Tippe aufs Wasser, um Tropfen fallen zu lassen.' : 'Ziehen dreht die Kamera, Pinch oder Mausrad zoomt. Die Lichtflecken am Boden sind echte Kaustiken: Jeder Sonnenstrahl wird einzeln durch das Glas verfolgt.' }
+  ] },
+  { id: 'waves', label: 'Wellen', show: () => S.mode === 'anim' && S.shape === 0, items: [
+    { type: 'chips', key: 'wave', label: 'Oberfläche', options: [['Glatt', 0], ['Dünung', 1], ['Wind', 2], ['Regen', 3], ['Sturm', 4], ['Interferenz', 5]], onChange: v => { if (v === 4 && S.depth < 2.5) S.depth = 3; } },
+    { type: 'range', key: 'waveAmp', label: 'Wellenhöhe', min: 0, max: 2, step: 0.01, fmt: v => '×' + v.toFixed(2) },
+    { type: 'range', key: 'waveSpeed', label: 'Tempo', min: 0, max: 2.5, step: 0.01, fmt: v => '×' + v.toFixed(2) },
+    { type: 'range', key: 'depth', label: 'Wassertiefe', min: 0.4, max: 6, step: 0.05, fmt: v => v.toFixed(2) + ' m' }
+  ] },
+  { id: 'struct', label: 'Struktur', show: () => S.mode === 'cam', items: [
+    { type: 'chips', key: 'struct', label: 'Glas vor der Linse', options: [['Wasser', 0], ['Regen am Fenster', 1], ['Riffelglas', 2], ['Hammerschlag', 3], ['Glasbausteine', 4], ['Facetten', 5], ['Prisma', 6], ['Glaskugel', 7], ['Kristall', 8], ['Wellenglas', 9]] },
+    { type: 'range', key: 'strength', label: 'Brechkraft', min: 0, max: 2.5, step: 0.01, fmt: v => '×' + v.toFixed(2) },
+    { type: 'range', key: 'scale', label: 'Größe', min: 0.4, max: 2.5, step: 0.01, fmt: v => '×' + v.toFixed(2) },
+    { type: 'range', key: 'frost', label: 'Milchigkeit', min: 0, max: 1, step: 0.01, fmt: v => Math.round(v * 100) + ' %' },
+    { type: 'note', text: () => 'Ziehen verschiebt Glaskugel, Prisma und Kristall. Im Wasser-Modus erzeugt Tippen Wellen.' }
+  ] },
+  { id: 'light', label: 'Licht', items: [
+    { type: 'range', key: 'hour', label: 'Uhrzeit', min: 4, max: 22.5, step: 1 / 60, fmt: v => fmtHour(v) + '  ·  ' + (sunElev(v) >= 0 ? '+' : '−') + Math.abs(sunElev(v)).toFixed(1) + '°', cls: 't-time' },
+    { type: 'chips', key: 'hour', label: 'Lichtstimmung', match: (a, b) => Math.abs(a - b) < 0.02, options: [['Dämmerung', 5.45], ['Morgen', 6.8], ['Mittag', 13], ['Goldene Stunde', 19.4], ['Sonnenuntergang', 19.87], ['Blaue Stunde', 20.62], ['Nacht', 22.3]] },
+    { type: 'toggle', key: 'beam', label: 'Dunkelkammer mit Lichtstrahl', show: () => S.mode === 'anim' && S.shape > 0 },
+    { type: 'toggle', key: 'timeRun', label: 'Zeitraffer' },
+    { type: 'range', key: 'clouds', label: 'Wolken', min: 0, max: 1, step: 0.01, fmt: v => Math.round(v * 100) + ' %', show: () => S.mode === 'anim' },
+    { type: 'range', key: 'exposure', label: 'Belichtung', min: -2, max: 2, step: 0.05, fmt: v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' EV' },
+    { type: 'range', key: 'bloom', label: 'Glühen', min: 0, max: 2, step: 0.01, fmt: v => Math.round(v * 100) + ' %' }
+  ] },
+  { id: 'mat', label: 'Material', items: [
+    { type: 'chips', key: 'mat', label: 'Material', options: MATS.map((m, i) => [m.name, i]), onChange: v => { S.ior = MATS[v].ior; S.disp = MATS[v].disp; } },
+    { type: 'range', key: 'ior', label: 'Brechungsindex n', min: 1.0, max: 2.6, step: 0.001, fmt: v => v.toFixed(3), cls: 't-ior', onChange: () => { S.mat = -1; } },
+    { type: 'range', key: 'disp', label: 'Dispersion nF − nC', min: 0, max: 0.12, step: 0.001, fmt: v => v.toFixed(3) + '  ·  V ' + abbe(), cls: 't-spec', onChange: () => { S.mat = -1; } },
+    { type: 'chips', key: 'tint', label: 'Tönung', options: TINTS.map((t, i) => [t.name, i]), show: () => S.mode === 'anim' },
+    { type: 'note', text: () => 'V ist die Abbe-Zahl: Je kleiner, desto stärker fächert das Material weißes Licht in Spektralfarben auf. Werte über 0,03 sind künstlerisch überzeichnet.' }
+  ] },
+  { id: 'out', label: 'Bild', items: [
+    { type: 'chips', key: 'quality', label: 'Qualität', options: QUAL.map((q, i) => [q.name, i]), onChange: () => { dynScale = 1; resize(true); } },
+    { type: 'range', key: 'grain', label: 'Filmkorn', min: 0, max: 1, step: 0.01, fmt: v => Math.round(v * 100) + ' %' },
+    { type: 'buttons', show: () => S.mode === 'cam', buttons: [['Kamera wechseln', () => flipCam()], ['Bild laden', () => $('#file').click()], ['Beispielbild', () => useSample()]] },
+    { type: 'note', text: () => S.mode === 'cam' ? 'Die Kamera braucht HTTPS (z. B. GitHub Pages). Fotos speicherst du über den Auslöser.' : 'Die Auflösung passt sich automatisch an, wenn das Gerät nicht hinterherkommt.' }
+  ] }
+];
+let activePane = 'scene', collapsed = false;
+const bound = [];
+function buildUI() {
+  const tabs = $('#tabs'), panes = $('#panes');
+  PANES.forEach(pane => {
+    const b = document.createElement('button');
+    b.textContent = pane.label;
+    b.dataset.pane = pane.id;
+    b.addEventListener('click', () => {
+      if (activePane === pane.id) setCollapsed(!collapsed);
+      else { activePane = pane.id; setCollapsed(false); }
+      syncUI();
+    });
+    tabs.appendChild(b);
+    pane.tab = b;
+    const div = document.createElement('div');
+    div.className = 'pane';
+    pane.el = div;
+    pane.items.forEach((it, k) => {
+      let el;
+      if (it.type === 'chips') {
+        el = document.createElement('div'); el.className = 'group';
+        if (it.label) { const l = document.createElement('span'); l.className = 'glabel'; l.textContent = it.label; el.appendChild(l); }
+        const c = document.createElement('div'); c.className = 'chips'; el.appendChild(c);
+        it.btns = it.options.map(([name, v]) => {
+          const x = document.createElement('button'); x.className = 'chip'; x.type = 'button';
+          x.textContent = name;
+          x.addEventListener('click', () => { S[it.key] = v; if (it.onChange) it.onChange(v); syncUI(); });
+          c.appendChild(x); return { x, v };
+        });
+      } else if (it.type === 'range') {
+        el = document.createElement('div'); el.className = 'ctl';
+        const id = 'r-' + pane.id + '-' + it.key;
+        el.innerHTML = '<div class="row"><label for="' + id + '"></label><span class="val"></span></div>';
+        el.querySelector('label').textContent = it.label;
+        const inp = document.createElement('input');
+        inp.type = 'range'; inp.id = id; inp.min = it.min; inp.max = it.max; inp.step = it.step;
+        if (it.cls) inp.className = it.cls;
+        inp.addEventListener('input', () => { S[it.key] = parseFloat(inp.value); if (it.onChange) it.onChange(S[it.key]); syncUI(inp); });
+        el.appendChild(inp);
+        it.inp = inp; it.val = el.querySelector('.val');
+      } else if (it.type === 'toggle') {
+        el = document.createElement('button'); el.className = 'toggle'; el.type = 'button';
+        el.innerHTML = '<span></span><i></i>';
+        el.querySelector('span').textContent = it.label;
+        el.addEventListener('click', () => { S[it.key] = !S[it.key]; syncUI(); });
+      } else if (it.type === 'buttons') {
+        el = document.createElement('div'); el.className = 'btnrow';
+        it.buttons.forEach(([name, fn]) => { const x = document.createElement('button'); x.className = 'btn'; x.type = 'button'; x.textContent = name; x.addEventListener('click', fn); el.appendChild(x); });
+      } else {
+        el = document.createElement('p'); el.className = 'note';
+      }
+      it.el = el;
+      div.appendChild(el);
+      bound.push(it);
+    });
+    panes.appendChild(div);
+  });
+  const grip = document.createElement('button');
+  grip.className = 'grip'; grip.setAttribute('aria-label', 'Einstellungen ein- oder ausklappen');
+  grip.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
+  grip.addEventListener('click', () => { setCollapsed(!collapsed); syncUI(); });
+  tabs.appendChild(grip);
+}
+function setCollapsed(v) { collapsed = v; $('#sheet').classList.toggle('collapsed', v); requestAnimationFrame(measureSheet); }
+function measureSheet() { document.documentElement.style.setProperty('--sheetH', $('#sheet').getBoundingClientRect().height + 'px'); }
+function syncUI(except) {
+  const visiblePanes = PANES.filter(p => !p.show || p.show());
+  if (!visiblePanes.find(p => p.id === activePane)) activePane = visiblePanes[0].id;
+  PANES.forEach(p => {
+    const vis = !p.show || p.show();
+    p.tab.hidden = !vis;
+    p.tab.classList.toggle('on', p.id === activePane);
+    p.tab.setAttribute('aria-selected', p.id === activePane);
+    p.el.hidden = p.id !== activePane;
+    p.items.forEach(it => {
+      it.el.hidden = !!(it.show && !it.show());
+      if (it.type === 'chips') it.btns.forEach(b => b.x.classList.toggle('on', it.match ? it.match(S[it.key], b.v) : S[it.key] === b.v));
+      else if (it.type === 'range') { if (it.inp !== except) it.inp.value = S[it.key]; it.val.textContent = it.fmt(S[it.key]); }
+      else if (it.type === 'toggle') it.el.setAttribute('aria-pressed', !!S[it.key]);
+      else if (it.type === 'note') it.el.textContent = it.text();
+    });
+  });
+  $('#mAnim').classList.toggle('on', S.mode === 'anim'); $('#mAnim').setAttribute('aria-selected', S.mode === 'anim');
+  $('#mCam').classList.toggle('on', S.mode === 'cam'); $('#mCam').setAttribute('aria-selected', S.mode === 'cam');
+  $('#shutterRow').hidden = S.mode !== 'cam';
+  updateMeta();
+  requestAnimationFrame(measureSheet);
+}
+function syncTime() {
+  const it = bound.find(b => b.key === 'hour' && b.type === 'range');
+  if (it && !it.el.hidden && it.el.offsetParent) { it.inp.value = S.hour; it.val.textContent = it.fmt(S.hour); }
+  const ch = bound.find(b => b.key === 'hour' && b.type === 'chips');
+  if (ch) ch.btns.forEach(b => b.x.classList.toggle('on', Math.abs(S.hour - b.v) < 0.02));
+  updateMeta();
+}
+function updateMeta() {
+  const what = S.mode === 'anim' ? (S.shape === 0 ? 'Wasser' : SHAPES[S.shape].name) : 'Kamera';
+  $('#meta').textContent = what + ' · n ' + S.ior.toFixed(3) + ' · V ' + abbe() + ' · ' + fmtHour(S.hour);
+}
+function setShape(v) {
+  const wasWater = cam.dist > 6.5;
+  if (v === 0) {
+    S.floor = 3; S.tint = 1; S.ior = MATS[0].ior; S.disp = MATS[0].disp; S.mat = 0;
+    if (!wasWater) { cam.pitch = CAM_DEFAULT.water.pitch; cam.dist = CAM_DEFAULT.water.dist; }
+  } else {
+    const m = SHAPES[v].mat;
+    S.ior = MATS[m].ior; S.disp = MATS[m].disp; S.mat = m;
+    if (S.tint === 1 && wasWater) S.tint = 0;
+    if (wasWater) { S.floor = 0; cam.pitch = CAM_DEFAULT.glass.pitch; cam.dist = CAM_DEFAULT.glass.dist; }
+  }
+}
+function setMode(m) {
+  if (S.mode === m) { if (m === 'cam' && src.kind !== 'video') startCam(); return; }
+  S.mode = m;
+  if (m === 'cam') {
+    if (activePane === 'scene' || activePane === 'waves') activePane = 'struct';
+    if (!sampleCanvas) useSample();
+    startCam();
+  } else {
+    stopCam();
+    if (activePane === 'struct') activePane = 'scene';
+  }
+  syncUI();
+}
+function flipCam() { facing = facing === 'environment' ? 'user' : 'environment'; startCam(); }
+
+let toastT = 0;
+function toast(msg, ms) {
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms || 2800);
+}
+
+/* ---------- photo ---------- */
+let photoURL = null, photoBlob = null;
+function showPhoto(blob) {
+  if (!blob) { toast('Das Foto konnte nicht erstellt werden.'); return; }
+  if (photoURL) URL.revokeObjectURL(photoURL);
+  photoBlob = blob; photoURL = URL.createObjectURL(blob);
+  $('#photoImg').src = photoURL;
+  $('#dlPhoto').href = photoURL;
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  $('#dlPhoto').download = 'refraktor-' + stamp + '.jpg';
+  $('#photo').hidden = false;
+  const canShare = !!(navigator.canShare && navigator.canShare({ files: [new File([blob], 'x.jpg', { type: 'image/jpeg' })] }));
+  $('#sharePhoto').hidden = !canShare;
+}
+$('#shutter').addEventListener('click', () => { pendingCapture = true; });
+$('#closePhoto').addEventListener('click', () => { $('#photo').hidden = true; });
+$('#sharePhoto').addEventListener('click', async () => {
+  try { await navigator.share({ files: [new File([photoBlob], $('#dlPhoto').download, { type: 'image/jpeg' })], title: 'Refraktor' }); }
+  catch (e) { if (e && e.name !== 'AbortError') toast('Teilen wird hier nicht unterstützt. Nutze Download oder langes Drücken aufs Bild.'); }
+});
+$('#flip').addEventListener('click', flipCam);
+$('#loadImg').addEventListener('click', () => $('#file').click());
+$('#file').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const img = new Image();
+  img.onload = () => {
+    const max = 2048, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    setStill(c, c.width, c.height);
+    URL.revokeObjectURL(img.src);
+    toast('Eigenes Bild geladen.');
+  };
+  img.onerror = () => toast('Dieses Bildformat kann nicht gelesen werden.');
+  img.src = URL.createObjectURL(f);
+  e.target.value = '';
+});
+$('#mAnim').addEventListener('click', () => setMode('anim'));
+$('#mCam').addEventListener('click', () => setMode('cam'));
+$('#hideUI').addEventListener('click', () => { document.body.classList.add('noui'); $('#restore').hidden = false; });
+$('#restore').addEventListener('click', () => { document.body.classList.remove('noui'); $('#restore').hidden = true; });
+
+/* ---------- pointer interaction ---------- */
+const ptrs = new Map();
+let drag = null, pinch0 = 0, dist0 = 0;
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 1) drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false };
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); dist0 = cam.dist; if (drag) drag.moved = true; }
+});
+canvas.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 2 && S.mode === 'anim') {
+    const [a, b] = [...ptrs.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinch0 > 0) cam.dist = clamp(dist0 * pinch0 / d, 2.6, 16);
+    return;
+  }
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 7) drag.moved = true;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (!drag.moved) return;
+  if (S.mode === 'anim') {
+    cam.yaw -= dx * 0.006;
+    cam.pitch = clamp(cam.pitch + dy * 0.004, 2 * deg, 80 * deg);
+  } else if (S.struct === 6 || S.struct === 7 || S.struct === 8) {
+    camPt = [clamp(e.clientX / innerWidth, 0, 1), clamp(1 - e.clientY / innerHeight, 0, 1)];
+  }
+});
+function endPtr(e) {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.delete(e.pointerId);
+  if (ptrs.size === 0) {
+    if (drag && !drag.moved && performance.now() - drag.t < 450) tap(e.clientX, e.clientY);
+    drag = null; pinch0 = 0;
+  }
+}
+canvas.addEventListener('pointerup', endPtr);
+canvas.addEventListener('pointercancel', endPtr);
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (S.mode === 'anim') cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), 2.6, 16);
+  else S.scale = clamp(S.scale * Math.exp(-e.deltaY * 0.0012), 0.4, 2.5), syncUI();
+}, { passive: false });
+function addRipple(x, z) {
+  ripples.push({ x, z, t0: time, amp: 1 });
+  if (ripples.length > 8) ripples.shift();
+}
+function tap(cx, cy) {
+  if (S.mode === 'anim') {
+    if (S.shape !== 0) return;
+    const cb = camBasis([0, 0, 0]);
+    const k = fovK();
+    const ux = (cx - innerWidth / 2) / innerHeight * k, uy = (innerHeight / 2 - cy) / innerHeight * k;
+    const rd = norm3([cb.r[0] * ux + cb.u[0] * uy + cb.f[0], cb.r[1] * ux + cb.u[1] * uy + cb.f[1], cb.r[2] * ux + cb.u[2] * uy + cb.f[2]]);
+    if (rd[1] >= -0.01) return;
+    const t = -cb.pos[1] / rd[1];
+    addRipple(cb.pos[0] + rd[0] * t, cb.pos[2] + rd[2] * t);
+  } else {
+    if (S.struct === 6 || S.struct === 7 || S.struct === 8) { camPt = [cx / innerWidth, 1 - cy / innerHeight]; return; }
+    const asp = innerWidth / innerHeight, K = 3 / S.scale;
+    addRipple((cx / innerWidth - 0.5) * asp * K, (0.5 - cy / innerHeight) * K);
+  }
+}
+addEventListener('resize', () => { requestAnimationFrame(measureSheet); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (src.kind === 'video') { stopCam(); src.resume = true; } }
+  else if (src.resume && S.mode === 'cam') { src.resume = false; startCam(); }
+});
+canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); toast('Die Grafik wurde vom System zurückgesetzt. Bitte Seite neu laden.', 8000); });
+
+/* ---------- boot ---------- */
+buildUI();
+if (coarse) setCollapsed(true);
+syncUI();
+resize(true);
+computeLight();
+if (location.hash === '#kamera') setMode('cam');
+requestAnimationFrame(t => { lastT = t; frame(t); });
+setTimeout(() => toast(coarse ? 'Ziehen zum Drehen · Pinch zum Zoomen' : 'Ziehen zum Drehen · Mausrad zum Zoomen'), 600);
+window.__refraktor = { S, cam, setMode, setShape, syncUI, get time() { return time; }, };
+})();
+</script>
+</body>
+</html>
