@@ -26,6 +26,14 @@ Die Farbstimmung der Uhrzeit lässt sich optional aufs Kamerabild legen.
 Dämmerung, Morgen (kühler, dunstiger), Mittag, Goldene Stunde, Sonnenuntergang, Blaue Stunde, Nacht (Mondlicht, Sterne).
 Dazu HDR-Rendering mit Bloom, filmischem Tonemapping, Vignette und Filmkorn.
 
+**Sensoren** (Tab „Sensoren“, nur auf dem Handy über HTTPS; Safari fragt beim Einschalten um Erlaubnis):
+
+- **Neigung & Bewegung** – Neigen verschiebt in der Animation die Perspektive (Tiefeneffekt) und dreht im Kamera-Modus
+  das Glasobjekt, als hieltest du es vor die Linse. Schütteln oder Ruckeln bringt das Wasser zum Schwappen und
+  erzeugt Wellen. „Neu ausrichten“ macht die aktuelle Haltung zur Mitte.
+- **Echte Sonne** – aus Standort und aktueller Uhrzeit wird der echte Sonnenstand berechnet (Höhe und Himmelsrichtung).
+  Mit Kompass steht die Sonne in der Szene genau dort, wo sie draußen ist, gemessen an der Richtung, in die das Handy zeigt.
+
 ## Aufs iPhone bringen
 
 Die Kamera funktioniert im Browser nur über **HTTPS**. Am einfachsten mit GitHub Pages:

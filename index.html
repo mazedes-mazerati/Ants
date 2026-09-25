@@ -242,6 +242,8 @@ uniform int uWave;
 uniform float uWaveAmp;
 uniform float uWaveSpeed;
 uniform vec4 uRip[8];
+uniform vec2 uSlosh;
+uniform vec4 uSloshAx;
 uniform float uSeed;
 uniform float uBeam;
 uniform float uBeamW;
@@ -370,6 +372,7 @@ float waveH(vec2 p){
     float da = length(p - a), db = length(p - b);
     h = 0.035*(sin(da*5.5 - t*3.5)/(1.0 + da*0.6) + sin(db*5.5 - t*3.5)/(1.0 + db*0.6));
   }
+  h += uSlosh.x*sin(dot(p, uSloshAx.xy)*0.55) + uSlosh.y*sin(dot(p, uSloshAx.zw)*0.55);
   return (h + tapRip(p))*uWaveAmp;
 }
 vec3 waveN(vec2 p, float e){
@@ -1263,7 +1266,7 @@ const S = {
   mode: 'anim',
   shape: 1, floor: 0, spin: !reduced,
   wave: 2, waveAmp: 1, waveSpeed: 1, depth: 1.4,
-  hour: 19.4, timeRun: false, beam: false, clouds: 0.35, exposure: 0, bloom: 0.7,
+  hour: 19.4, timeRun: false, beam: false, motion: false, realSun: false, tiltGain: 1, clouds: 0.35, exposure: 0, bloom: 0.7,
   mat: 2, ior: 1.62, disp: 0.017, tint: 0,
   camObj: 0, struct: 0, strength: 1, scale: 1, frost: 0.25, bgBlur: 0, camGrade: false,
   quality: 1, grain: 0.35
@@ -1330,6 +1333,9 @@ let spinA = 0.6, time = 0, lastT = performance.now(), seed = 3.1;
 let ripples = [];
 let camPt = [0.5, 0.52];
 let dynScale = 1;
+const sens = { beta: 0, gamma: 0, ref: null, heading: null, hasOri: false, sx: 0, sy: 0, ax: 0, az: 0, lastShake: 0 };
+const slosh = { a: [0, 0], v: [0, 0], ax: new Float32Array([1, 0, 0, 1]) };
+let geo = null;
 
 /* ================================================================
    Time of day → light
@@ -1350,16 +1356,39 @@ function sunElev(h) {
   if (h >= 6 && h <= 20) return 58 * Math.sin(Math.PI * (h - 6) / 14);
   return h < 6 ? -(6 - h) * 11 : -(h - 20) * 11;
 }
+// Sun position (NOAA-style low-precision formulas, good to ~0.1°)
+function solarPosition(date, lat, lon) {
+  const d = date.getTime() / 86400000 + 2440587.5 - 2451545.0;
+  const g = (357.529 + 0.98560028 * d) * deg;
+  const q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * deg;
+  const ec = (23.439 - 0.00000036 * d) * deg;
+  const ra = Math.atan2(Math.cos(ec) * Math.sin(L), Math.cos(L));
+  const dec = Math.asin(Math.sin(ec) * Math.sin(L));
+  const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24;
+  let ha = (gmst * 15 + lon) * deg - ra;
+  ha = Math.atan2(Math.sin(ha), Math.cos(ha));
+  const la = lat * deg;
+  const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha));
+  const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(ha));
+  return { el: el / deg, az, am: ha < 0 };
+}
 function computeLight() {
   const h = S.hour;
-  const e = sunElev(h);
+  let e = sunElev(h), realAz = null, am = h < 13;
+  if (S.realSun && geo) {
+    const sp = solarPosition(new Date(), geo.lat, geo.lon);
+    e = sp.el; am = sp.am; realAz = sp.az;
+    // with a compass, tie the scene to real directions: the view direction is where the phone points
+    if (S.motion && sens.heading !== null) realAz = -effYaw(curCam()) + (realAz - sens.heading * deg);
+  }
   let i = 0;
   while (i < KF.length - 2 && e > KF[i + 1].e) i++;
   const a = KF[i], b = KF[i + 1];
   const t = clamp((e - a.e) / (b.e - a.e), 0, 1);
   let zen = lerp3(a.zen, b.zen, t), hor = lerp3(a.hor, b.hor, t), sun = lerp3(a.sun, b.sun, t);
   let fog = lerp(a.fog, b.fog, t);
-  const morning = h < 13;
+  const morning = am;
   if (morning) {
     const w = clamp(1 - (e + 4) / 22, 0, 1);
     hor = [hor[0] * lerp(1, 0.9, w), hor[1] * lerp(1, 0.86, w), hor[2] * lerp(1, 1.3, w)];
@@ -1369,7 +1398,7 @@ function computeLight() {
   let dir;
   if (e > -4.5) {
     const el = Math.max(e, 0.7) * deg;
-    const phi = clamp((h - 13) / 7, -1.15, 1.15) * 1.35;
+    const phi = realAz !== null ? realAz : clamp((h - 13) / 7, -1.15, 1.15) * 1.35;
     dir = [Math.cos(el) * Math.sin(phi), Math.sin(el), -Math.cos(el) * Math.cos(phi)];
   } else {
     const el = 24 * deg, phi = 0.5;
@@ -1469,6 +1498,8 @@ function setCommon(p) {
   u1f(p, 'uBeam', S.beam && S.mode === 'anim' && S.shape > 0 ? 1 : 0);
   u1f(p, 'uBeamW', BEAM_W);
   u1i(p, 'uWave', S.wave);
+  gl.uniform2f(U(p, 'uSlosh'), slosh.a[0], slosh.a[1]);
+  gl.uniform4fv(U(p, 'uSloshAx'), slosh.ax);
   u1f(p, 'uWaveAmp', S.waveAmp);
   u1f(p, 'uWaveSpeed', S.waveSpeed);
   ripArr.fill(0);
@@ -1483,9 +1514,16 @@ function setSpec(p, n) {
   u1f(p, 'uIOR', S.ior);
   u1f(p, 'uDisp', S.disp);
 }
+function tiltGain(c) { return S.motion ? (c === camC ? 1.0 : 0.35) * S.tiltGain : 0; }
+function effYaw(c) { return c.yaw - sens.sx * deg * tiltGain(c); }
+function effPitch(c) {
+  const p = c.pitch + sens.sy * deg * tiltGain(c);
+  return c === camC ? clamp(p, -85 * deg, 85 * deg) : clamp(p, 2 * deg, 80 * deg);
+}
 function camBasis(target, cam = curCam()) {
-  const cp = Math.cos(cam.pitch);
-  const pos = [target[0] + Math.sin(cam.yaw) * cp * cam.dist, target[1] + Math.sin(cam.pitch) * cam.dist, target[2] + Math.cos(cam.yaw) * cp * cam.dist];
+  const yaw = effYaw(cam), pitch = effPitch(cam);
+  const cp = Math.cos(pitch);
+  const pos = [target[0] + Math.sin(yaw) * cp * cam.dist, target[1] + Math.sin(pitch) * cam.dist, target[2] + Math.cos(yaw) * cp * cam.dist];
   const f = norm3([target[0] - pos[0], target[1] - pos[1], target[2] - pos[2]]);
   const r = norm3(cross(f, [0, 1, 0]));
   const u = cross(r, f);
@@ -1633,7 +1671,7 @@ function renderWater() {
   u1i(p, 'uFloor', S.floor);
   u3v(p, 'uAbsorb', TINTS[S.tint].a);
   u1f(p, 'uDepth', S.depth);
-  u1f(p, 'uWaveBound', (WAVE_BOUND[S.wave] + 0.08) * S.waveAmp + 0.01);
+  u1f(p, 'uWaveBound', (WAVE_BOUND[S.wave] + 0.08 + Math.abs(slosh.a[0]) + Math.abs(slosh.a[1])) * S.waveAmp + 0.01);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, cauT.tex);
   u1i(p, 'uCau', 0);
   u2f(p, 'uCauTex', cauT.w, cauT.h);
@@ -1877,6 +1915,7 @@ function frame(now) {
     syncTime();
   }
   ripples = ripples.filter(r => time - r.t0 < 9);
+  updateSensors(dt);
   ema = lerp(ema, dt * 1000, 0.05);
   if (ema > 48 && dynScale > 0.62 && time > 2.5 && !window.__noAdapt) { slowFor += dt; if (slowFor > 1.5) { dynScale *= 0.85; slowFor = 0; } }
   else slowFor = 0;
@@ -1925,10 +1964,10 @@ const PANES = [
   ] },
   { id: 'light', label: 'Licht', items: [
     { type: 'toggle', key: 'camGrade', label: 'Farbstimmung der Uhrzeit aufs Kamerabild legen', show: () => S.mode === 'cam' },
-    { type: 'range', key: 'hour', show: () => S.mode === 'anim' || S.camGrade, label: 'Uhrzeit', min: 4, max: 22.5, step: 1 / 60, fmt: v => fmtHour(v) + '  ·  ' + (sunElev(v) >= 0 ? '+' : '−') + Math.abs(sunElev(v)).toFixed(1) + '°', cls: 't-time' },
-    { type: 'chips', key: 'hour', show: () => S.mode === 'anim' || S.camGrade, label: 'Lichtstimmung', match: (a, b) => Math.abs(a - b) < 0.02, options: [['Dämmerung', 5.45], ['Morgen', 6.8], ['Mittag', 13], ['Goldene Stunde', 19.4], ['Sonnenuntergang', 19.87], ['Blaue Stunde', 20.62], ['Nacht', 22.3]] },
+    { type: 'range', key: 'hour', show: () => (S.mode === 'anim' || S.camGrade) && !S.realSun, label: 'Uhrzeit', min: 4, max: 22.5, step: 1 / 60, fmt: v => fmtHour(v) + '  ·  ' + (sunElev(v) >= 0 ? '+' : '−') + Math.abs(sunElev(v)).toFixed(1) + '°', cls: 't-time' },
+    { type: 'chips', key: 'hour', show: () => (S.mode === 'anim' || S.camGrade) && !S.realSun, label: 'Lichtstimmung', match: (a, b) => Math.abs(a - b) < 0.02, options: [['Dämmerung', 5.45], ['Morgen', 6.8], ['Mittag', 13], ['Goldene Stunde', 19.4], ['Sonnenuntergang', 19.87], ['Blaue Stunde', 20.62], ['Nacht', 22.3]] },
     { type: 'toggle', key: 'beam', label: 'Dunkelkammer mit Lichtstrahl', show: () => S.mode === 'anim' && S.shape > 0 },
-    { type: 'toggle', key: 'timeRun', label: 'Zeitraffer', show: () => S.mode === 'anim' || S.camGrade },
+    { type: 'toggle', key: 'timeRun', label: 'Zeitraffer', show: () => (S.mode === 'anim' || S.camGrade) && !S.realSun },
     { type: 'range', key: 'clouds', label: 'Wolken', min: 0, max: 1, step: 0.01, fmt: v => Math.round(v * 100) + ' %', show: () => S.mode === 'anim' },
     { type: 'range', key: 'exposure', label: 'Belichtung', min: -2, max: 2, step: 0.05, fmt: v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' EV' },
     { type: 'range', key: 'bloom', label: 'Glühen', min: 0, max: 2, step: 0.01, fmt: v => Math.round(v * 100) + ' %' }
@@ -1939,6 +1978,16 @@ const PANES = [
     { type: 'range', key: 'disp', label: 'Dispersion nF − nC', min: 0, max: 0.12, step: 0.001, fmt: v => v.toFixed(3) + '  ·  V ' + abbe(), cls: 't-spec', onChange: () => { S.mat = -1; } },
     { type: 'chips', key: 'tint', label: 'Tönung', options: TINTS.map((t, i) => [t.name, i]), show: () => S.mode === 'anim' || camObj3D() },
     { type: 'note', text: () => 'V ist die Abbe-Zahl: Je kleiner, desto stärker fächert das Material weißes Licht in Spektralfarben auf. Werte über 0,03 sind künstlerisch überzeichnet.' }
+  ] },
+  { id: 'sensors', label: 'Sensoren', items: [
+    { type: 'toggle', key: 'motion', label: 'Neigung & Bewegung', onChange: v => { if (v) enableMotion(); } },
+    { type: 'toggle', key: 'realSun', label: 'Echte Sonne (Standort & Uhrzeit)', onChange: v => { if (v) enableRealSun(); } },
+    { type: 'range', key: 'tiltGain', label: 'Stärke der Neigung', min: 0, max: 2, step: 0.01, fmt: v => '×' + v.toFixed(2), show: () => S.motion },
+    { type: 'buttons', show: () => S.motion, buttons: [['Neu ausrichten', () => { sens.ref = null; toast('Aktuelle Haltung ist jetzt die Mitte.'); }]] },
+    { type: 'note', live: true, text: sensorText },
+    { type: 'note', text: () => S.mode === 'anim'
+      ? 'Neigen verschiebt die Perspektive, Schütteln oder Ruckeln bringt das Wasser zum Schwappen. Mit Kompass und echter Sonne steht die Sonne in der Szene dort, wo sie draußen wirklich ist, gemessen an der Richtung, in die dein Handy zeigt.'
+      : 'Neigen dreht das Glasobjekt, als würdest du es vor die Kamera halten. Bei der Glasscheibe „Wasser“ erzeugt Schütteln Wellen.' }
   ] },
   { id: 'out', label: 'Bild', items: [
     { type: 'chips', key: 'quality', label: 'Qualität', options: QUAL.map((q, i) => [q.name, i]), onChange: () => { dynScale = 1; resize(true); } },
@@ -1992,7 +2041,7 @@ function buildUI() {
         el = document.createElement('button'); el.className = 'toggle'; el.type = 'button';
         el.innerHTML = '<span></span><i></i>';
         el.querySelector('span').textContent = it.label;
-        el.addEventListener('click', () => { S[it.key] = !S[it.key]; syncUI(); });
+        el.addEventListener('click', () => { S[it.key] = !S[it.key]; if (it.onChange) it.onChange(S[it.key]); syncUI(); });
       } else if (it.type === 'buttons') {
         el = document.createElement('div'); el.className = 'btnrow';
         it.buttons.forEach(([name, fn]) => { const x = document.createElement('button'); x.className = 'btn'; x.type = 'button'; x.textContent = name; x.addEventListener('click', fn); el.appendChild(x); });
@@ -2125,6 +2174,135 @@ $('#mAnim').addEventListener('click', () => setMode('anim'));
 $('#mCam').addEventListener('click', () => setMode('cam'));
 $('#hideUI').addEventListener('click', () => { document.body.classList.add('noui'); $('#restore').hidden = false; });
 $('#restore').addEventListener('click', () => { document.body.classList.remove('noui'); $('#restore').hidden = true; });
+
+/* ---------- device sensors ---------- */
+function screenTilt() {
+  const a = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+  const b = sens.beta, g = sens.gamma;
+  if (a === 90) return [b, -g];
+  if (a === -90 || a === 270) return [-b, g];
+  if (a === 180) return [-g, -b];
+  return [g, b];
+}
+function onOrientation(e) {
+  if (e.beta === null && e.gamma === null) return;
+  sens.beta = e.beta || 0; sens.gamma = e.gamma || 0; sens.hasOri = true;
+  if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) sens.heading = e.webkitCompassHeading;
+  else if (e.absolute && e.alpha !== null) sens.heading = (360 - e.alpha) % 360;
+}
+function onMotion(e) {
+  const a = e.acceleration;
+  if (!a || a.x === null) return;
+  sens.ax = a.x; sens.az = a.z;
+  const m = Math.hypot(a.x, a.y, a.z);
+  const now = performance.now();
+  if (S.motion && m > 12 && now - sens.lastShake > 110) { sens.lastShake = now; shakeRipple(Math.min(m / 20, 1.6)); }
+}
+addEventListener('deviceorientation', onOrientation);
+addEventListener('deviceorientationabsolute', onOrientation);
+addEventListener('devicemotion', onMotion);
+async function enableMotion() {
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== 'granted') throw new Error('denied');
+    }
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+      await DeviceMotionEvent.requestPermission().catch(() => 'denied');
+    }
+    sens.ref = null;
+    S.motion = true;
+    toast('Bewegungssensoren sind aktiv. Neige oder schüttle das Handy.');
+    setTimeout(() => { if (S.motion && !sens.hasOri) toast('Dieses Gerät oder dieser Browser liefert keine Neigungsdaten.', 4200); }, 2000);
+  } catch (err) {
+    S.motion = false;
+    toast('Zugriff auf die Bewegungssensoren wurde nicht erlaubt. Lade die Seite neu und tippe erneut auf den Schalter.', 5200);
+  }
+  syncUI();
+}
+function enableRealSun() {
+  S.realSun = false;
+  if (!navigator.geolocation) { toast('Dieser Browser kann den Standort nicht bestimmen.'); return; }
+  toast('Standort wird bestimmt …');
+  navigator.geolocation.getCurrentPosition(pos => {
+    geo = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+    S.realSun = true; S.timeRun = false;
+    const sp = solarPosition(new Date(), geo.lat, geo.lon);
+    toast('Echte Sonne: ' + (sp.el >= 0 ? '+' : '−') + Math.abs(sp.el).toFixed(1) + '° über dem Horizont, Richtung ' + compassName(sp.az / deg) + '.', 4200);
+    syncUI();
+  }, () => {
+    S.realSun = false;
+    toast('Standort nicht verfügbar. Erlaube den Zugriff für diese Seite in den Safari-Einstellungen.', 5200);
+    syncUI();
+  }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 600000 });
+}
+function compassName(a) {
+  const n = ['N', 'NO', 'O', 'SO', 'S', 'SW', 'W', 'NW'];
+  return n[Math.round((((a % 360) + 360) % 360) / 45) % 8];
+}
+function sensorText() {
+  const parts = [];
+  if (S.motion) {
+    if (sens.hasOri) {
+      const [tx, ty] = screenTilt();
+      parts.push('Neigung ' + Math.round(tx) + '° / ' + Math.round(ty) + '°');
+      parts.push(sens.heading !== null ? 'Kompass ' + Math.round(sens.heading) + '° ' + compassName(sens.heading) : 'kein Kompass');
+    } else parts.push('Warte auf Sensordaten …');
+  }
+  if (S.realSun && geo) {
+    const sp = solarPosition(new Date(), geo.lat, geo.lon);
+    parts.push(Math.abs(geo.lat).toFixed(2) + '°' + (geo.lat >= 0 ? 'N' : 'S') + ' ' + Math.abs(geo.lon).toFixed(2) + '°' + (geo.lon >= 0 ? 'O' : 'W'));
+    parts.push('Sonne ' + (sp.el >= 0 ? '+' : '−') + Math.abs(sp.el).toFixed(1) + '°, ' + Math.round(((sp.az / deg) + 360) % 360) + '° ' + compassName(sp.az / deg));
+  }
+  return parts.length ? parts.join('  ·  ') : 'Sensoren sind aus. Sie funktionieren nur auf dem Handy und über HTTPS.';
+}
+function updateSensors(dt) {
+  // smoothed tilt relative to the reference pose
+  let tx = 0, ty = 0;
+  if (S.motion && sens.hasOri) {
+    const [a, b] = screenTilt();
+    if (!sens.ref) sens.ref = [a, b];
+    tx = clamp(a - sens.ref[0], -50, 50);
+    ty = clamp(b - sens.ref[1], -50, 50);
+  }
+  const k = Math.min(1, dt * 9);
+  sens.sx += (tx - sens.sx) * k;
+  sens.sy += (ty - sens.sy) * k;
+  // sloshing: two damped standing modes driven by the phone's linear acceleration
+  const w2 = 2.4 * 2.4, c = 0.9;
+  const f = S.motion ? [-sens.ax * 0.05, sens.az * 0.05] : [0, 0];
+  for (let i = 0; i < 2; i++) {
+    slosh.v[i] += (f[i] - w2 * slosh.a[i] - c * slosh.v[i]) * dt;
+    slosh.a[i] = clamp(slosh.a[i] + slosh.v[i] * dt, -0.6, 0.6);
+  }
+  const cb = camBasis([0, 0, 0], cam);
+  const r = norm3([cb.r[0], 0, cb.r[2]]), fw = norm3([cb.f[0], 0, cb.f[2]]);
+  slosh.ax.set([r[0], r[2], fw[0], fw[2]]);
+  if (S.realSun) {
+    const d = new Date();
+    S.hour = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+  }
+  if (S.motion || S.realSun) {
+    const now = performance.now();
+    if (!sens.lastUI || now - sens.lastUI > 400) {
+      sens.lastUI = now;
+      bound.forEach(it => { if (it.live && !it.el.hidden) it.el.textContent = it.text(); });
+      if (S.realSun) updateMeta();
+    }
+  }
+}
+function shakeRipple(amp) {
+  if (S.mode === 'anim' && S.shape === 0) {
+    const cb = camBasis([0, 0, 0], cam);
+    const fw = norm3([cb.f[0], 0, cb.f[2]]), r = norm3([cb.r[0], 0, cb.r[2]]);
+    const a = 1 + Math.random() * 7, b = (Math.random() - 0.5) * 7;
+    ripples.push({ x: fw[0] * a + r[0] * b, z: fw[2] * a + r[2] * b, t0: time, amp });
+  } else if (S.mode === 'cam' && CAM_OBJS[S.camObj].struct === 0) {
+    const asp = innerWidth / innerHeight, K = 3 / S.scale;
+    ripples.push({ x: (Math.random() - 0.5) * asp * K, z: (Math.random() - 0.5) * K, t0: time, amp });
+  } else return;
+  if (ripples.length > 8) ripples.shift();
+}
 
 /* ---------- pointer interaction ---------- */
 const ptrs = new Map();
