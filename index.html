@@ -1042,26 +1042,77 @@ void main(){
     float fogA = uFrost*(1.0 - c.y);
     float l = dot(acc, vec3(0.2126, 0.7152, 0.0722));
     acc = mix(acc, vec3(l)*1.05 + 0.02, fogA*0.35);
-    float caus = 1.0 + clamp(-lap*0.0025*uStrength, -0.45, 1.6);
-    col = acc*caus*c.z;
-    vec3 rv = reflect(vec3(0.0, 0.0, -1.0), n);
-    col += uSunCol*pow(max(dot(rv, normalize(uLdir)), 0.0), 60.0)*0.6;
-    col += uHorizon*pow(1.0 - n.z, 2.0)*0.6;
-    if (uStruct == 6){
-      vec2 nrm = vec2(cos(0.35), sin(0.35));
-      float d = dot(q - gP, nrm);
-      float band = exp(-pow(d/0.12, 2.0));
-      float edgeB = exp(-pow((abs(d) - 0.9)/0.06, 2.0));
-      col += rainbow(clamp(d/0.24 + 0.5, 0.0, 1.0))*uSunCol*0.35*band*(0.4 + uDisp*12.0);
-      col += rainbow(fract(abs(d)*3.0 + uTime*0.02))*uSunCol*0.12*edgeB;
-      col += vid(vec2(1.0 - uv.x, uv.y), 3.0)*0.18*step(abs(d), 0.9);
-    }
+    float F = fres(n.z, uIOR);
+    col = mix(acc, vid(vec2(1.0 - uv.x, uv.y) - g*0.02, 4.0), F*0.6);
   }
   col = uLift + col*uGain;
   float lg = dot(col, vec3(0.2126, 0.7152, 0.0722));
   col = mix(vec3(lg), col, uSat);
-  vec2 lp = (uv - uLeakPos)*vec2(gAsp, 1.0);
-  col += uSunCol*0.10*uLeak*exp(-dot(lp, lp)*2.2);
+  o = vec4(max(col, 0.0)*uEnc, 1.0);
+}`;
+
+const FS_CAMGLASS = HEAD + COMMON + SDF + SPEC_U + CAM_U + `
+out vec4 o;
+uniform sampler2D uVid;
+uniform vec2 uVidSize;
+uniform float uMirror;
+uniform float uBgZ;
+uniform float uBgBlur;
+uniform vec3 uGain;
+uniform vec3 uLift;
+uniform float uSat;
+vec3 vidUV(vec2 s, float lod){
+  float asp = uRes.x/uRes.y;
+  float av = uVidSize.x/uVidSize.y;
+  s -= 0.5;
+  if (asp > av) s.y *= av/asp; else s.x *= asp/av;
+  s += 0.5;
+  if (uMirror > 0.5) s.x = 1.0 - s.x;
+  return pow(textureLod(uVid, s, lod).rgb, vec3(2.2));
+}
+// The camera image acts as a backdrop plane uBgZ in front of the viewer;
+// rays leaving towards the viewer see a blurred, mirrored copy of it.
+vec3 envCam(vec3 ro, vec3 rd){
+  mat3 inv = transpose(uCamRot);
+  vec3 oc = inv*(ro - uCamPos);
+  vec3 dc = inv*rd;
+  float asp = uRes.x/uRes.y;
+  float w = smoothstep(-0.02, -0.3, dc.z);
+  vec3 front = vec3(0.0), back = vec3(0.0);
+  if (w > 0.0){
+    float t = (-uBgZ - oc.z)/min(dc.z, -1e-3);
+    vec2 pp = (oc.xy + dc.xy*t)/(uBgZ*uFovK);
+    front = vidUV(pp/vec2(asp, 1.0) + 0.5, uBgBlur);
+  }
+  if (w < 1.0) back = vidUV(vec2(0.5) + vec2(-dc.x, dc.y)*0.45, 4.5)*0.85;
+  return mix(back, front, w);
+}
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes)/uRes.y;
+  vec3 rd = normalize(uCamRot*vec3(uv*uFovK, -1.0));
+  vec3 ro = uCamPos;
+  vec3 col;
+  float t;
+  if (marchOut(ro, rd, t)){
+    vec3 p = ro + rd*t;
+    vec3 n = nObj(p);
+    float F = fres(dot(-rd, n), uIOR);
+    vec3 refl = envCam(p + n*0.004, reflect(rd, n));
+    vec3 tr = vec3(0.0);
+    for (int i = 0; i < 8; i++){
+      if (i >= uS) break;
+      float ior = uIOR + uDisp*uSpecO[i];
+      vec3 pos = p, dir = rd, thr = vec3(1.0);
+      glassPath(pos, dir, thr, n, ior);
+      tr += uSpecW[i]*thr*envCam(pos, dir);
+    }
+    col = refl*F + tr*(1.0 - F);
+  } else {
+    col = vidUV(gl_FragCoord.xy/uRes, uBgBlur);
+  }
+  col = uLift + col*uGain;
+  float lg = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col = mix(vec3(lg), col, uSat);
   o = vec4(max(col, 0.0)*uEnc, 1.0);
 }`;
 
@@ -1158,7 +1209,7 @@ function program(vs, fs) {
   return p;
 }
 const SRC = {
-  glass: [VS_FULL, FS_GLASS], water: [VS_FULL, FS_WATER], filter: [VS_FULL, FS_FILTER],
+  glass: [VS_FULL, FS_GLASS], water: [VS_FULL, FS_WATER], filter: [VS_FULL, FS_FILTER], camGlass: [VS_FULL, FS_CAMGLASS],
   phGlass: [VS_PH_GLASS, FS_PHOTON], phWater: [VS_PH_WATER, FS_PHOTON],
   fill: [VS_FULL, HEAD + 'out vec4 o; void main(){ o = vec4(0.0); }'],
   down: [VS_FULL, FS_DOWN], up: [VS_FULL, FS_UP], comp: [VS_FULL, FS_COMPOSITE]
@@ -1214,7 +1265,7 @@ const S = {
   wave: 2, waveAmp: 1, waveSpeed: 1, depth: 1.4,
   hour: 19.4, timeRun: false, beam: false, clouds: 0.35, exposure: 0, bloom: 0.7,
   mat: 2, ior: 1.62, disp: 0.017, tint: 0,
-  struct: 0, strength: 1, scale: 1, frost: 0.25,
+  camObj: 0, struct: 0, strength: 1, scale: 1, frost: 0.25, bgBlur: 0, camGrade: false,
   quality: 1, grain: 0.35
 };
 const MATS = [
@@ -1264,6 +1315,16 @@ const SHAPES = [
 ];
 
 const cam = { yaw: -0.85, pitch: 15 * deg, dist: 5.4, fov: 42 * deg };
+const CAM_OBJS = [
+  { name: 'Glaskugel', shape: 1 }, { name: 'Prisma', shape: 2 }, { name: 'Linse', shape: 3 }, { name: 'Diamant', shape: 4 },
+  { name: 'Glasring', shape: 5 }, { name: 'Würfel', shape: 6 }, { name: 'Skulptur', shape: 7 },
+  { name: 'Wasser', struct: 0 }, { name: 'Regen am Fenster', struct: 1 }, { name: 'Riffelglas', struct: 2 },
+  { name: 'Hammerschlag', struct: 3 }, { name: 'Wellenglas', struct: 9 }
+];
+const camC = { yaw: 0, pitch: 4 * deg, dist: 4.2, fov: 42 * deg };
+const curCam = () => S.mode === 'cam' ? camC : cam;
+const camMinDist = () => SHAPES[CAM_OBJS[S.camObj].shape].R * 0.9 + 0.12;
+const camObj3D = () => CAM_OBJS[S.camObj].shape !== undefined;
 const CAM_DEFAULT = { glass: { pitch: 15 * deg, dist: 5.4 }, water: { pitch: 17 * deg, dist: 7.5 } };
 let spinA = 0.6, time = 0, lastT = performance.now(), seed = 3.1;
 let ripples = [];
@@ -1422,7 +1483,7 @@ function setSpec(p, n) {
   u1f(p, 'uIOR', S.ior);
   u1f(p, 'uDisp', S.disp);
 }
-function camBasis(target) {
+function camBasis(target, cam = curCam()) {
   const cp = Math.cos(cam.pitch);
   const pos = [target[0] + Math.sin(cam.yaw) * cp * cam.dist, target[1] + Math.sin(cam.pitch) * cam.dist, target[2] + Math.cos(cam.yaw) * cp * cam.dist];
   const f = norm3([target[0] - pos[0], target[1] - pos[1], target[2] - pos[2]]);
@@ -1440,7 +1501,7 @@ function setCam(p, cb) {
 }
 function fovK() {
   const asp = innerWidth / innerHeight;
-  return 2 * Math.tan(cam.fov / 2) * Math.max(1, Math.pow(1 / asp, 0.75));
+  return 2 * Math.tan(curCam().fov / 2) * Math.max(1, Math.pow(1 / asp, 0.75));
 }
 function setCaustic(p, reg) {
   u2f(p, 'uCauC', reg.C[0], reg.C[1]);
@@ -1691,10 +1752,43 @@ function useSample(msg) {
   setStill(sampleCanvas, sampleCanvas.width, sampleCanvas.height);
   if (msg) toast(msg, 5200);
 }
+function uploadVideo() {
+  if (src.kind === 'video' && video.readyState >= 2 && video.videoWidth > 0) uploadSource(video, video.videoWidth, video.videoHeight);
+}
+function setGrade(p) {
+  const on = S.camGrade;
+  u3v(p, 'uGain', on ? Lt.gain : [1, 1, 1]);
+  u3v(p, 'uLift', on ? Lt.lift : [0, 0, 0]);
+  u1f(p, 'uSat', on ? Lt.sat : 1);
+}
+function renderCamGlass() {
+  uploadVideo();
+  const o = CAM_OBJS[S.camObj], sh = SHAPES[o.shape], q = QUAL[S.quality];
+  camC.dist = Math.max(camC.dist, camMinDist());
+  let R = sh.aim ? mul3(rotY(Math.PI / 2), rotX(0)) : sh.tilt;
+  if (S.spin) R = mul3(rotY(spinA), R);
+  const p = P('camGlass');
+  gl.useProgram(p);
+  bindTarget(hdr);
+  setCommon(p); setSpec(p, q.S);
+  u1i(p, 'uShape', o.shape);
+  gl.uniformMatrix3fv(U(p, 'uObjRot'), false, new Float32Array(R));
+  u3v(p, 'uObjPos', [0, 0, 0]);
+  u1f(p, 'uObjR', sh.R);
+  u1f(p, 'uStepK', sh.step);
+  u3v(p, 'uAbsorb', TINTS[S.tint].a);
+  setCam(p, camBasis([0, 0, 0], camC));
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, vidTex);
+  u1i(p, 'uVid', 0);
+  u2f(p, 'uVidSize', src.w, src.h);
+  u1f(p, 'uMirror', src.mirror ? 1 : 0);
+  u1f(p, 'uBgZ', camC.dist + 7);
+  u1f(p, 'uBgBlur', S.bgBlur * 6);
+  setGrade(p);
+  drawTri();
+}
 function renderFilter() {
-  if (src.kind === 'video' && video.readyState >= 2 && video.videoWidth > 0) {
-    uploadSource(video, video.videoWidth, video.videoHeight);
-  }
+  uploadVideo();
   const q = QUAL[S.quality];
   const p = P('filter');
   gl.useProgram(p);
@@ -1704,15 +1798,13 @@ function renderFilter() {
   u1i(p, 'uVid', 0);
   u2f(p, 'uVidSize', src.w, src.h);
   u1f(p, 'uMirror', src.mirror ? 1 : 0);
-  u1i(p, 'uStruct', S.struct);
+  u1i(p, 'uStruct', CAM_OBJS[S.camObj].struct);
   u1f(p, 'uStrength', S.strength);
   u1f(p, 'uScale', S.scale);
   u1f(p, 'uFrost', S.frost);
   u2f(p, 'uPt', camPt[0], camPt[1]);
   u2f(p, 'uRes', RW, RH);
-  u3v(p, 'uGain', Lt.gain);
-  u3v(p, 'uLift', Lt.lift);
-  u1f(p, 'uSat', Lt.sat);
+  setGrade(p);
   u3v(p, 'uLdir', Lt.ldir);
   u2f(p, 'uLeakPos', Lt.leakPos[0], Lt.leakPos[1]);
   u1f(p, 'uLeak', Lt.leak);
@@ -1758,7 +1850,7 @@ function composite() {
   const anim = S.mode === 'anim';
   const beamOn = anim && S.beam && S.shape > 0;
   u1f(p, 'uExposure', (anim ? Lt.exp : 1) * Math.pow(2, S.exposure) * (beamOn ? 1.6 : 1));
-  u1f(p, 'uBloomK', S.bloom * (anim ? 0.22 : 0.3));
+  u1f(p, 'uBloomK', S.bloom * (anim ? 0.22 : 0.14));
   u1f(p, 'uGrain', S.grain);
   u1f(p, 'uEnc', ENC);
   u1f(p, 'uTime', time);
@@ -1778,7 +1870,7 @@ function frame(now) {
   lastT = now;
   time += dt;
   seed = Math.random() * 97;
-  if (S.spin && S.mode === 'anim' && S.shape > 0) spinA += dt * 0.22;
+  if (S.spin && (S.mode === 'cam' || S.shape > 0)) spinA += dt * (S.mode === 'cam' ? 0.12 : 0.22);
   if (S.timeRun) {
     S.hour += dt * 0.3;
     if (S.hour > 22.5) S.hour = 4.0;
@@ -1792,6 +1884,7 @@ function frame(now) {
   computeLight();
   try {
     if (S.mode === 'anim') { if (S.shape === 0) renderWater(); else renderGlass(); }
+    else if (camObj3D()) renderCamGlass();
     else renderFilter();
     bloomPass();
     composite();
@@ -1820,18 +1913,22 @@ const PANES = [
     { type: 'range', key: 'waveSpeed', label: 'Tempo', min: 0, max: 2.5, step: 0.01, fmt: v => '×' + v.toFixed(2) },
     { type: 'range', key: 'depth', label: 'Wassertiefe', min: 0.4, max: 6, step: 0.05, fmt: v => v.toFixed(2) + ' m' }
   ] },
-  { id: 'struct', label: 'Struktur', show: () => S.mode === 'cam', items: [
-    { type: 'chips', key: 'struct', label: 'Glas vor der Linse', options: [['Wasser', 0], ['Regen am Fenster', 1], ['Riffelglas', 2], ['Hammerschlag', 3], ['Glasbausteine', 4], ['Facetten', 5], ['Prisma', 6], ['Glaskugel', 7], ['Kristall', 8], ['Wellenglas', 9]] },
-    { type: 'range', key: 'strength', label: 'Brechkraft', min: 0, max: 2.5, step: 0.01, fmt: v => '×' + v.toFixed(2) },
-    { type: 'range', key: 'scale', label: 'Größe', min: 0.4, max: 2.5, step: 0.01, fmt: v => '×' + v.toFixed(2) },
-    { type: 'range', key: 'frost', label: 'Milchigkeit', min: 0, max: 1, step: 0.01, fmt: v => Math.round(v * 100) + ' %' },
-    { type: 'note', text: () => 'Ziehen verschiebt Glaskugel, Prisma und Kristall. Im Wasser-Modus erzeugt Tippen Wellen.' }
+  { id: 'struct', label: 'Glas', show: () => S.mode === 'cam', items: [
+    { type: 'chips', key: 'camObj', label: 'Glasobjekt vor der Kamera', options: CAM_OBJS.map((o, i) => [o.name, i]).filter((x, i) => CAM_OBJS[i].shape !== undefined), onChange: v => { const sh = SHAPES[CAM_OBJS[v].shape]; S.ior = MATS[sh.mat].ior; S.disp = MATS[sh.mat].disp; S.mat = sh.mat; camC.dist = sh.R * 3.6; camC.yaw = 0; camC.pitch = 4 * deg; } },
+    { type: 'chips', key: 'camObj', label: 'Glasscheibe', options: CAM_OBJS.map((o, i) => [o.name, i]).filter((x, i) => CAM_OBJS[i].shape === undefined) },
+    { type: 'toggle', key: 'spin', label: 'Objekt dreht sich', show: () => camObj3D() },
+    { type: 'range', key: 'bgBlur', label: 'Hintergrund-Unschärfe', min: 0, max: 1, step: 0.01, fmt: v => Math.round(v * 100) + ' %', show: () => camObj3D() },
+    { type: 'range', key: 'strength', label: 'Brechkraft', min: 0, max: 2.5, step: 0.01, fmt: v => '×' + v.toFixed(2), show: () => !camObj3D() },
+    { type: 'range', key: 'scale', label: 'Größe', min: 0.4, max: 2.5, step: 0.01, fmt: v => '×' + v.toFixed(2), show: () => !camObj3D() },
+    { type: 'range', key: 'frost', label: 'Milchigkeit', min: 0, max: 1, step: 0.01, fmt: v => Math.round(v * 100) + ' %', show: () => !camObj3D() },
+    { type: 'note', text: () => camObj3D() ? 'Ziehen dreht das Objekt, Pinch oder Mausrad zoomt. Geh ganz nah ran, um durch das Glas hindurchzuschauen.' : 'Pinch oder Mausrad ändert die Größe der Struktur. Bei „Wasser“ erzeugt Tippen Wellen.' }
   ] },
   { id: 'light', label: 'Licht', items: [
-    { type: 'range', key: 'hour', label: 'Uhrzeit', min: 4, max: 22.5, step: 1 / 60, fmt: v => fmtHour(v) + '  ·  ' + (sunElev(v) >= 0 ? '+' : '−') + Math.abs(sunElev(v)).toFixed(1) + '°', cls: 't-time' },
-    { type: 'chips', key: 'hour', label: 'Lichtstimmung', match: (a, b) => Math.abs(a - b) < 0.02, options: [['Dämmerung', 5.45], ['Morgen', 6.8], ['Mittag', 13], ['Goldene Stunde', 19.4], ['Sonnenuntergang', 19.87], ['Blaue Stunde', 20.62], ['Nacht', 22.3]] },
+    { type: 'toggle', key: 'camGrade', label: 'Farbstimmung der Uhrzeit aufs Kamerabild legen', show: () => S.mode === 'cam' },
+    { type: 'range', key: 'hour', show: () => S.mode === 'anim' || S.camGrade, label: 'Uhrzeit', min: 4, max: 22.5, step: 1 / 60, fmt: v => fmtHour(v) + '  ·  ' + (sunElev(v) >= 0 ? '+' : '−') + Math.abs(sunElev(v)).toFixed(1) + '°', cls: 't-time' },
+    { type: 'chips', key: 'hour', show: () => S.mode === 'anim' || S.camGrade, label: 'Lichtstimmung', match: (a, b) => Math.abs(a - b) < 0.02, options: [['Dämmerung', 5.45], ['Morgen', 6.8], ['Mittag', 13], ['Goldene Stunde', 19.4], ['Sonnenuntergang', 19.87], ['Blaue Stunde', 20.62], ['Nacht', 22.3]] },
     { type: 'toggle', key: 'beam', label: 'Dunkelkammer mit Lichtstrahl', show: () => S.mode === 'anim' && S.shape > 0 },
-    { type: 'toggle', key: 'timeRun', label: 'Zeitraffer' },
+    { type: 'toggle', key: 'timeRun', label: 'Zeitraffer', show: () => S.mode === 'anim' || S.camGrade },
     { type: 'range', key: 'clouds', label: 'Wolken', min: 0, max: 1, step: 0.01, fmt: v => Math.round(v * 100) + ' %', show: () => S.mode === 'anim' },
     { type: 'range', key: 'exposure', label: 'Belichtung', min: -2, max: 2, step: 0.05, fmt: v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' EV' },
     { type: 'range', key: 'bloom', label: 'Glühen', min: 0, max: 2, step: 0.01, fmt: v => Math.round(v * 100) + ' %' }
@@ -1840,7 +1937,7 @@ const PANES = [
     { type: 'chips', key: 'mat', label: 'Material', options: MATS.map((m, i) => [m.name, i]), onChange: v => { S.ior = MATS[v].ior; S.disp = MATS[v].disp; } },
     { type: 'range', key: 'ior', label: 'Brechungsindex n', min: 1.0, max: 2.6, step: 0.001, fmt: v => v.toFixed(3), cls: 't-ior', onChange: () => { S.mat = -1; } },
     { type: 'range', key: 'disp', label: 'Dispersion nF − nC', min: 0, max: 0.12, step: 0.001, fmt: v => v.toFixed(3) + '  ·  V ' + abbe(), cls: 't-spec', onChange: () => { S.mat = -1; } },
-    { type: 'chips', key: 'tint', label: 'Tönung', options: TINTS.map((t, i) => [t.name, i]), show: () => S.mode === 'anim' },
+    { type: 'chips', key: 'tint', label: 'Tönung', options: TINTS.map((t, i) => [t.name, i]), show: () => S.mode === 'anim' || camObj3D() },
     { type: 'note', text: () => 'V ist die Abbe-Zahl: Je kleiner, desto stärker fächert das Material weißes Licht in Spektralfarben auf. Werte über 0,03 sind künstlerisch überzeichnet.' }
   ] },
   { id: 'out', label: 'Bild', items: [
@@ -1967,6 +2064,7 @@ function setMode(m) {
   S.mode = m;
   if (m === 'cam') {
     if (activePane === 'scene' || activePane === 'waves') activePane = 'struct';
+    if (camObj3D()) { const m = SHAPES[CAM_OBJS[S.camObj].shape].mat; S.ior = MATS[m].ior; S.disp = MATS[m].disp; S.mat = m; if (S.tint === 1) S.tint = 0; }
     if (!sampleCanvas) useSample();
     startCam();
   } else {
@@ -2035,15 +2133,18 @@ canvas.addEventListener('pointerdown', e => {
   canvas.setPointerCapture(e.pointerId);
   ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (ptrs.size === 1) drag = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false };
-  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); dist0 = cam.dist; if (drag) drag.moved = true; }
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); dist0 = curCam().dist; if (drag) drag.moved = true; }
 });
 canvas.addEventListener('pointermove', e => {
   if (!ptrs.has(e.pointerId)) return;
   ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (ptrs.size === 2 && S.mode === 'anim') {
+  if (ptrs.size === 2) {
     const [a, b] = [...ptrs.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y);
-    if (pinch0 > 0) cam.dist = clamp(dist0 * pinch0 / d, 2.6, 16);
+    if (pinch0 > 0) {
+      if (S.mode === 'anim') cam.dist = clamp(dist0 * pinch0 / d, 2.6, 16);
+      else if (camObj3D()) camC.dist = clamp(dist0 * pinch0 / d, camMinDist(), 14);
+    }
     return;
   }
   if (!drag) return;
@@ -2054,8 +2155,9 @@ canvas.addEventListener('pointermove', e => {
   if (S.mode === 'anim') {
     cam.yaw -= dx * 0.006;
     cam.pitch = clamp(cam.pitch + dy * 0.004, 2 * deg, 80 * deg);
-  } else if (S.struct === 6 || S.struct === 7 || S.struct === 8) {
-    camPt = [clamp(e.clientX / innerWidth, 0, 1), clamp(1 - e.clientY / innerHeight, 0, 1)];
+  } else if (camObj3D()) {
+    camC.yaw -= dx * 0.006;
+    camC.pitch = clamp(camC.pitch + dy * 0.006, -85 * deg, 85 * deg);
   }
 });
 function endPtr(e) {
@@ -2071,6 +2173,7 @@ canvas.addEventListener('pointercancel', endPtr);
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
   if (S.mode === 'anim') cam.dist = clamp(cam.dist * Math.exp(e.deltaY * 0.0012), 2.6, 16);
+  else if (camObj3D()) camC.dist = clamp(camC.dist * Math.exp(e.deltaY * 0.0012), camMinDist(), 14);
   else S.scale = clamp(S.scale * Math.exp(-e.deltaY * 0.0012), 0.4, 2.5), syncUI();
 }, { passive: false });
 function addRipple(x, z) {
@@ -2088,7 +2191,7 @@ function tap(cx, cy) {
     const t = -cb.pos[1] / rd[1];
     addRipple(cb.pos[0] + rd[0] * t, cb.pos[2] + rd[2] * t);
   } else {
-    if (S.struct === 6 || S.struct === 7 || S.struct === 8) { camPt = [cx / innerWidth, 1 - cy / innerHeight]; return; }
+    if (camObj3D() || CAM_OBJS[S.camObj].struct !== 0) return;
     const asp = innerWidth / innerHeight, K = 3 / S.scale;
     addRipple((cx / innerWidth - 0.5) * asp * K, (0.5 - cy / innerHeight) * K);
   }
@@ -2109,7 +2212,7 @@ computeLight();
 if (location.hash === '#kamera') setMode('cam');
 requestAnimationFrame(t => { lastT = t; frame(t); });
 setTimeout(() => toast(coarse ? 'Ziehen zum Drehen · Pinch zum Zoomen' : 'Ziehen zum Drehen · Mausrad zum Zoomen'), 600);
-window.__refraktor = { S, cam, setMode, setShape, syncUI, get time() { return time; }, };
+window.__refraktor = { S, cam, camC, setMode, setShape, syncUI, get time() { return time; }, };
 })();
 </script>
 </body>

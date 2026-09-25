@@ -15,12 +15,12 @@ Eine einzige Datei (`index.html`), keine Abhängigkeiten, läuft komplett auf de
 - Fresnel-Reflexion, Totalreflexion, Absorption nach Beer-Lambert (Tönungen: Klar, Aqua, Smaragd, Bernstein, Rosé, Kobalt)
 - **Dunkelkammer mit Lichtstrahl**: schmaler Lichtspalt im dunklen Raum, sichtbarer Strahl – das klassische Prisma-Spektrum
 
-**Kamera** – die Rückkamera (oder Frontkamera) wird durch eine simulierte Glasscheibe gefiltert:
-
-Wasser, Regen am Fenster (mit beschlagener Scheibe und laufenden Tropfen), Riffelglas, Hammerschlag, Glasbausteine,
-Facetten, Prisma (mit Regenbogen-Lichtstreifen), Glaskugel (umgedrehtes Bild), Kristall, Wellenglas.
-Ziehen verschiebt Kugel/Prisma/Kristall. Auslöser speichert ein Foto (Teilen-Menü bzw. Download).
-Ohne Kamera funktioniert der Filter auch mit einem eigenen Bild oder dem Beispielbild.
+**Kamera** – dieselben raygetracten Glasobjekte wie in der Animation (Glaskugel, Prisma, Linse, Diamant, Glasring,
+Würfel, Skulptur) stehen vor der Kamera; das Livebild wird physikalisch durch das Glas gebrochen, mit Dispersion und
+Fresnel-Spiegelung. Ziehen dreht das Objekt, Pinch zoomt – ganz nah ran, um hindurchzuschauen.
+Dazu flache Glasscheiben: Wasser, Regen am Fenster, Riffelglas, Hammerschlag, Wellenglas.
+Auslöser speichert ein Foto. Ohne Kamera funktioniert das auch mit einem eigenen Bild oder dem Beispielbild.
+Die Farbstimmung der Uhrzeit lässt sich optional aufs Kamerabild legen.
 
 **Licht** – ein Tageszeit-Regler von 4:00 bis 22:30 steuert Sonnenstand, Himmelsfarben, Dunst und Farbstimmung:
 Dämmerung, Morgen (kühler, dunstiger), Mittag, Goldene Stunde, Sonnenuntergang, Blaue Stunde, Nacht (Mondlicht, Sterne).
@@ -45,8 +45,8 @@ Lokal testen geht mit jedem statischen Server, z. B. `python3 -m http.server` un
 
 | Geste | Animation | Kamera |
 | --- | --- | --- |
-| Ziehen | Kamera um das Objekt drehen | Glaskugel / Prisma / Kristall verschieben |
-| Pinch / Mausrad | Zoom | Größe der Struktur |
+| Ziehen | Kamera um das Objekt drehen | Glasobjekt drehen |
+| Pinch / Mausrad | Zoom | Zoom bis ans Glas (Glasscheibe: Größe der Struktur) |
 | Tippen | Tropfen ins Wasser | Welle (Struktur „Wasser“) |
 
 Die Qualität (Schnell / Ausgewogen / Maximal) legt Auflösung, Anzahl der Wellenlängen und Photonen fest.
